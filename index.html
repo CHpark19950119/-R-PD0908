@@ -36,26 +36,18 @@
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: 'Noto Serif KR', serif; background: var(--primary-dark); color: var(--text-light); min-height: 100vh; overflow-x: hidden; }
         
-        /* 화면 전환 시 스크롤 방지: 페이지(스크린) 전환은 버튼으로만. 스크롤은 각 화면(.screen) 내부에서만 허용 */
+        /* 화면 전환 시 스크롤 방지 */
         html, body {
             height: 100%;
             overflow: hidden;
-            overscroll-behavior: none;
-            touch-action: manipulation;
         }
+        
         .screen { 
             display: none; 
             height: 100%; 
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            overscroll-behavior: contain;
         }
         .screen.active { 
             display: block;
@@ -71,7 +63,6 @@
         }
         
         #home-screen {
-
             background: url('assets/dungeon-bg.png') center center / cover no-repeat fixed;
             position: relative;
             display: flex;
@@ -79,8 +70,7 @@
             justify-content: flex-end;
             padding-bottom: 30px;
             height: 100%;
-            overflow-y: auto;
-        
+            overflow: hidden;
         }
         #home-screen::before {
             content: '';
@@ -92,9 +82,7 @@
                 rgba(15, 12, 20, 0.65) 100%);
             pointer-events: none;
         }
-        .home-content {
- position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; height: 100%; overflow-y: auto; 
-        }
+        .home-content { position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .home-title { 
             font-family: 'Cinzel', serif; 
@@ -541,7 +529,27 @@
            dungeon-rooms.jpg is now used consistently and kept visible.
         */
 
-    </style>
+    
+/* ===== MODAL FIX : 사서의 보고 클릭 불가 문제 해결 ===== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: auto;
+}
+.modal {
+    position: relative;
+    z-index: 10000;
+}
+/* 모달 활성 시 배경 차단 */
+body.modal-open .screen {
+    pointer-events: none;
+}
+body.modal-open .modal-overlay {
+    pointer-events: auto;
+}
+
+</style>
 </head>
 <body>
 
