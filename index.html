@@ -1,0 +1,2501 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#d4af37">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>PSAT 던전</title>
+    <link rel="icon" type="image/jpeg" href="assets/dungeon-icon.jpeg">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Cinzel:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+    <style>
+        :root {
+            --primary-dark: #1a1825;
+            --secondary-dark: #252236;
+            --accent-gold: #e8c547;
+            --accent-gold-dim: #d4b13a;
+            --text-light: #f5f2eb;
+            --text-dim: #a8a4a0;
+            --text-ancient: #e0d5c0;
+            --success: #5eead4;
+            --danger: #f87171;
+            --boss-glow: #fbbf24;
+            --card-bg: rgba(37, 34, 54, 0.85);
+            --border-ornate: #9a8560;
+            --holy-light: rgba(255, 248, 220, 0.15);
+            --sacred-glow: rgba(232, 197, 71, 0.4);
+            /* Shared room background used across dungeon selection and battle */
+            --room-bg: url('assets/dungeon-rooms.jpg');
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Noto Serif KR', serif; background: var(--primary-dark); color: var(--text-light); min-height: 100vh; overflow-x: hidden; }
+        
+        /* 화면 전환 시 스크롤 방지 */
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .screen { 
+            display: none; 
+            height: 100%; 
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+        .screen.active { 
+            display: block;
+        }
+
+        /*
+         * Fixed headers (.screen-header) sit above content.
+         * Reserve vertical space so auto-navigation / hash routing never hides
+         * the first actionable UI under the header.
+         */
+        .screen.has-fixed-header {
+            padding-top: calc(78px + env(safe-area-inset-top, 0px));
+        }
+        
+        #home-screen {
+            background: url('assets/dungeon-bg.png') center center / cover no-repeat fixed;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding-bottom: 30px;
+            height: 100%;
+            overflow: hidden;
+        }
+        #home-screen::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, 
+                rgba(20, 18, 28, 0.1) 0%, 
+                rgba(18, 15, 25, 0.25) 40%, 
+                rgba(15, 12, 20, 0.65) 100%);
+            pointer-events: none;
+        }
+        .home-content { position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .home-title { 
+            font-family: 'Cinzel', serif; 
+            font-size: 2.8rem; 
+            color: #d4b856; 
+            text-align: center; 
+            text-shadow: 0 0 60px rgba(232, 197, 71, 0.4), 0 0 30px rgba(0,0,0,0.9), 2px 2px 4px #000, -1px -1px 2px rgba(180, 150, 58, 0.3); 
+            margin-top: 60px;
+            margin-bottom: 10px; 
+            letter-spacing: 8px; 
+            font-weight: 900;
+            animation: titleGlow 3s ease-in-out infinite alternate;
+        }
+        @keyframes titleGlow {
+            0% { text-shadow: 0 0 60px rgba(232, 197, 71, 0.4), 0 0 30px rgba(0,0,0,0.9), 2px 2px 4px #000; opacity: 0.9; }
+            100% { text-shadow: 0 0 80px rgba(232, 197, 71, 0.6), 0 0 40px rgba(201, 162, 39, 0.5), 2px 2px 4px #000; opacity: 1; }
+        }
+        .home-subtitle { 
+            text-align: center; 
+            color: var(--text-ancient); 
+            font-size: 0.9rem; 
+            margin-bottom: auto; 
+            font-style: italic; 
+            text-shadow: 0 2px 6px rgba(0,0,0,0.95);
+            padding: 8px 20px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 20px;
+            display: inline-block;
+            margin-left: auto;
+            margin-right: auto;
+            width: fit-content;
+            backdrop-filter: blur(4px);
+        }
+        .dungeon-grid { display: grid; gap: 15px; max-width: 400px; margin: 0 auto 25px; margin-top: auto; }
+        /* Home screen: keep the background image highly visible by making buttons near-transparent */
+        .dungeon-card {
+            background: rgba(28, 25, 38, 0.08);
+            border: 2px solid rgba(122, 104, 69, 0.35);
+            border-radius: 16px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .dungeon-card:hover, .dungeon-card:active { border-color: var(--accent-gold); transform: scale(1.02); box-shadow: 0 0 40px rgba(232, 197, 71, 0.3); background: rgba(232, 197, 71, 0.15); }
+        .dungeon-card.locked { opacity: 0.4; pointer-events: none; filter: grayscale(0.5); }
+        .dungeon-icon { font-size: 2.2rem; text-align: center; margin-bottom: 12px; filter: drop-shadow(0 0 15px rgba(232, 197, 71, 0.5)); }
+.dungeon-icon-img { 
+    width: 56px; 
+    height: 56px; 
+    object-fit: contain; 
+    display: block; 
+    margin: 0 auto 12px; 
+    filter: drop-shadow(0 0 18px rgba(232, 197, 71, 0.4)) saturate(0.9) brightness(0.95) contrast(1.05); 
+    opacity: 0.98;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+.dungeon-card:hover .dungeon-icon-img {
+    transform: scale(1.1) translateY(-3px);
+    filter: drop-shadow(0 0 25px rgba(232, 197, 71, 0.6)) saturate(1) brightness(1) contrast(1.05);
+}
+
+        .dungeon-icon-regular { filter: drop-shadow(0 0 14px rgba(212,175,55,0.30)) saturate(0.80) brightness(0.90) contrast(1.05); }
+        .dungeon-icon-weakness { filter: drop-shadow(0 0 14px rgba(212,175,55,0.32)) saturate(0.72) brightness(0.88) contrast(1.10); }
+        .dungeon-icon-special { filter: drop-shadow(0 0 14px rgba(212,175,55,0.28)) saturate(0.85) brightness(0.92) contrast(1.06); }
+
+        .bgm-toggle { position: fixed; bottom: 20px; right: 75px; background: var(--card-bg); border: 1px solid var(--border-ornate); border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 50; font-size: 1.2rem; transition: all 0.3s; }
+        .bgm-toggle:hover { border-color: var(--accent-gold); background: rgba(232, 197, 71, 0.2); }
+        .bgm-toggle.muted { opacity: 0.5; }
+        .dungeon-name { font-family: 'Cinzel', serif; font-size: 1.3rem; font-weight: 700; color: var(--accent-gold); text-align: center; margin-bottom: 6px; text-shadow: 0 2px 4px rgba(0,0,0,0.7); }
+        .dungeon-desc { font-size: 0.8rem; color: var(--text-ancient); text-align: center; line-height: 1.4; opacity: 0.9; }
+        .nav-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .nav-btn { background: rgba(122, 104, 69, 0.08); border: 1px solid rgba(232, 197, 71, 0.35); color: var(--accent-gold); padding: 12px 22px; border-radius: 10px; font-family: 'Noto Serif KR', serif; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease; backdrop-filter: blur(4px); }
+        .nav-btn:hover, .nav-btn:active { background: var(--accent-gold); color: var(--primary-dark); box-shadow: 0 0 25px rgba(232, 197, 71, 0.5); }
+        
+        .dungeon-enter-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 1000; display: none; align-items: center; justify-content: center; flex-direction: column; }
+        .dungeon-enter-overlay.active { display: flex; animation: dungeonEnterBg 2.5s ease forwards; }
+        @keyframes dungeonEnterBg { 0% { background: rgba(0,0,0,0.95); } 70% { background: rgba(0,0,0,0.7); } 100% { background: transparent; opacity: 0; pointer-events: none; } }
+        .enter-icon { font-size: 4rem; margin-bottom: 20px; animation: enterIconFloat 1.5s ease-in-out infinite; filter: drop-shadow(0 0 20px rgba(232, 197, 71, 0.6)); }
+        .enter-icon img { width: 90px; height: 90px; object-fit: contain; display: block; filter: drop-shadow(0 0 20px rgba(212,175,55,0.45)) saturate(0.85) brightness(0.95) contrast(1.05); opacity: 0.98; }
+
+        @keyframes enterIconFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .enter-text { font-family: 'Cinzel', serif; font-size: 1.6rem; color: var(--accent-gold); text-shadow: 0 0 20px rgba(232, 197, 71, 0.5); margin-top: 10px; animation: enterTextFade 2s ease forwards; letter-spacing: 4px; }
+        @keyframes enterTextFade { 0% { opacity: 0; transform: translateY(10px); } 30% { opacity: 1; transform: translateY(0); } 100% { opacity: 1; } }
+        .enter-subtitle { color: var(--text-ancient); margin-top: 8px; font-style: italic; font-size: 0.9rem; animation: enterTextFade 2s ease 0.3s forwards; opacity: 0; }
+        .enter-dots { margin-top: 20px; display: flex; gap: 8px; }
+        .enter-dot { width: 8px; height: 8px; background: var(--accent-gold); border-radius: 50%; animation: dotPulse 1s ease infinite; }
+        .enter-dot:nth-child(2) { animation-delay: 0.2s; }
+        .enter-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotPulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+        
+        .screen-header { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 15px; padding: 15px 20px; background: rgba(28, 25, 38, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border-ornate); z-index: 100; }
+        .back-btn { background: none; border: none; color: var(--accent-gold); font-size: 1.5rem; cursor: pointer; padding: 5px 10px; }
+        .screen-title { font-family: 'Cinzel', serif; font-size: 1.2rem; color: var(--accent-gold); }
+        
+        /* Dungeon set select screen: show dungeon-rooms, and shift view by dungeon type */
+        #set-select-screen {
+            --room-pos: 50% 50%;
+            background-image:
+                linear-gradient(to bottom, rgba(20, 18, 28, 0.3) 0%, rgba(15, 12, 20, 0.5) 100%),
+                var(--room-bg);
+            background-position: center center, var(--room-pos);
+            background-size: cover, cover;
+            background-repeat: no-repeat, no-repeat;
+            background-attachment: scroll, fixed;
+            position: relative;
+            padding: 20px;
+            padding-top: 80px;
+            padding-bottom: 100px;
+        }
+        #set-select-screen[data-dungeon="regular"] { --room-pos: 20% 50%; }
+        #set-select-screen[data-dungeon="weakness"] { --room-pos: 80% 50%; }
+        #set-select-screen[data-dungeon="special"] { --room-pos: 50% 40%; }
+
+        .date-group {   background: rgba(28, 25, 38, 0.5);
+    border: 1px solid rgba(232, 197, 71, 0.3);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px}
+        .date-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(122, 104, 69, 0.5); }
+        .date-icon { font-size: 1.3rem; }
+        .date-title { font-family: 'Cinzel', serif; color: var(--accent-gold); font-size: 1rem; }
+        .date-subtitle { font-size: 0.75rem; color: var(--text-dim); }
+        .date-badge { background: var(--accent-gold); color: var(--primary-dark); font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; font-weight: 700; margin-left: auto; }
+        .date-badge.old { background: var(--text-dim); }
+        .set-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .set-card {  background: rgba(28, 25, 38, 0.08);
+    border: 1px solid rgba(122, 104, 69, 0.35);
+    border-radius: 10px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px); }
+        .set-card:hover { border-color: var(--accent-gold); transform: translateX(5px); box-shadow: 0 5px 20px rgba(232, 197, 71, 0.15); }
+        .set-card .set-number { font-family: 'Cinzel', serif; font-size: 1.4rem; color: var(--accent-gold); margin-bottom: 3px; }
+        .set-card .set-info { font-size: 0.7rem; color: var(--text-dim); }
+        .set-card .set-progress { margin-top: 8px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+        .set-card .set-progress-fill { height: 100%; background: var(--accent-gold); transition: width 0.3s; }
+
+        /* Battle screen: keep the selected dungeon room background throughout problem solving */
+        #battle-screen {
+            --room-pos: 50% 50%;
+            --room-overlay: radial-gradient(ellipse at center bottom, rgba(30, 27, 42, 0.88) 0%, rgba(20,18,28,0.80) 70%, rgba(15, 12, 20, 0.92) 100%);
+            padding: 0;
+            background-image: var(--room-overlay), var(--room-bg);
+            background-position: center center, var(--room-pos);
+            background-size: cover, cover;
+            background-repeat: no-repeat, no-repeat;
+            background-attachment: scroll, fixed;
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+        #battle-screen[data-dungeon="regular"] {
+            --room-pos: 20% 50%;
+            --room-overlay: radial-gradient(ellipse at center bottom, rgba(30, 27, 42, 0.88) 0%, rgba(20,18,28,0.80) 70%, rgba(15, 12, 20, 0.92) 100%);
+        }
+        #battle-screen[data-dungeon="weakness"] {
+            --room-pos: 80% 50%;
+            --room-overlay: radial-gradient(ellipse at center bottom, rgba(28, 22, 35, 0.90) 0%, rgba(18, 14, 24, 0.85) 70%, rgba(12, 10, 18, 0.94) 100%);
+        }
+        #battle-screen[data-dungeon="special"] {
+            --room-pos: 50% 40%;
+            --room-overlay: radial-gradient(ellipse at center bottom, rgba(25, 30, 35, 0.88) 0%, rgba(18, 22, 28, 0.85) 70%, rgba(12, 10, 18, 0.94) 100%);
+        }
+        #battle-screen.boss-mode {
+            --room-overlay: radial-gradient(ellipse at center, rgba(35, 28, 40, 0.90) 0%, rgba(22, 18, 28, 0.88) 50%, rgba(14, 10, 18, 0.95) 100%);
+        }
+        #battle-screen.boss-mode::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 20% 80%, rgba(232, 197, 71, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(180, 140, 60, 0.1) 0%, transparent 50%); animation: bossAmbient 3s ease infinite alternate; pointer-events: none; }
+        @keyframes bossAmbient { from { opacity: 0.5; } to { opacity: 1; } }
+        .battle-header { position: fixed; top: 0; left: 0; right: 0; background: rgba(20, 18, 28, 0.95); backdrop-filter: blur(10px); padding: 12px 20px; z-index: 100; border-bottom: 2px solid var(--border-ornate); }
+        .battle-header::before { content: '📜 학습 진행중'; position: absolute; top: -1px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-dim)); color: var(--primary-dark); font-size: 0.65rem; font-weight: 700; padding: 2px 12px; border-radius: 0 0 8px 8px; font-family: 'Cinzel', serif; letter-spacing: 1px; animation: dungeonRunPulse 2s ease-in-out infinite; }
+        @keyframes dungeonRunPulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 1; box-shadow: 0 2px 10px rgba(232, 197, 71, 0.5); } }
+        .battle-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .battle-progress { font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--accent-gold); }
+        .battle-timer { font-family: 'Cinzel', serif; font-size: 1.2rem; font-weight: 700; color: var(--text-light); font-variant-numeric: tabular-nums; }
+        .battle-timer.warning { color: var(--danger); animation: timerPulse 0.5s infinite; }
+        @keyframes timerPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .progress-bar { height: 6px; background: rgba(122, 104, 69, 0.3); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-gold-dim), var(--accent-gold)); transition: width 0.3s ease; }
+        .control-btn { background: none; border: none; color: var(--text-light); font-size: 1.2rem; cursor: pointer; padding: 5px; opacity: 0.7; }
+        .control-btn:hover { opacity: 1; color: var(--accent-gold); }
+        
+        .monster-area { padding-top: 90px; display: flex; flex-direction: column; align-items: center; padding-bottom: 15px; min-height: 280px; transition: min-height 0.3s ease; }
+        .boss-mode .monster-area { min-height: 340px; }
+        .monster-container { position: relative; width: 160px; height: 160px; margin: 10px auto; transition: all 0.4s ease; }
+        .boss-mode .monster-container { width: 290px; height: 290px; }
+        .boss-raid .monster-container { transform: scale(1.02); }
+
+/* === Boss Stage: oversized (not fullscreen) boss + framed border === */
+#battle-screen.boss-raid {
+  position: relative;
+  overflow: hidden;
+}
+/* keep the battle layout; just give the boss more presence */
+#battle-screen.boss-raid .monster-area{
+  padding-top: 90px;
+  padding-bottom: 10px;
+  min-height: 420px;
+}
+#battle-screen.boss-raid .monster-container{
+  /* big, but bounded so it doesn't swallow the whole screen */
+  width: clamp(240px, 62vmin, 360px);
+  height: clamp(240px, 62vmin, 360px);
+  margin: 8px auto 6px;
+}
+#battle-screen.boss-raid .monster-image{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 22px;
+  /* preserve the original image (including its background) */
+  filter: drop-shadow(0 14px 30px rgba(0,0,0,0.78)) drop-shadow(0 0 26px rgba(212,175,55,0.18));
+}
+/* boss frame: strong border + subtle inner glow */
+#battle-screen.boss-raid .monster-container::after{
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 30px;
+  border: 4px solid rgba(212,175,55,0.55);
+  box-shadow: 0 0 40px rgba(212,175,55,0.25), 0 0 18px rgba(180,140,60,0.22), inset 0 0 24px rgba(180,140,60,0.16);
+  pointer-events: none;
+}
+#battle-screen.boss-raid .boss-badge{
+  display: inline-block;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(232, 197, 71, 0.18);
+  border: 1px solid rgba(232, 197, 71, 0.45);
+}
+
+        .boss-raid .monster-container::before { content: ''; position: absolute; inset: -18px; border-radius: 28px; background: conic-gradient(from 180deg, rgba(212,175,55,0.0), rgba(212,175,55,0.18), rgba(180,140,60,0.18), rgba(212,175,55,0.0)); filter: blur(10px); animation: bossAuraSpin 2.2s linear infinite; z-index: -1; }
+        .boss-raid .monster-container::after { content: ''; position: absolute; inset: -6px; border-radius: 24px; border: 2px solid rgba(212,175,55,0.45); box-shadow: 0 0 35px rgba(212,175,55,0.25), inset 0 0 25px rgba(180,140,60,0.18); pointer-events: none; }
+        @keyframes bossAuraSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .monster-image { width: 100%; height: 100%; object-fit: contain; border-radius: 0px; filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.8)); animation: monsterIdle 2s ease-in-out infinite; }
+        @keyframes monsterIdle { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-8px) scale(1.02); } }
+        .monster-image.boss { filter: drop-shadow(0 0 40px var(--boss-glow)) drop-shadow(0 0 80px rgba(180, 140, 60, 0.6)); animation: bossIdle 1.5s ease-in-out infinite; border: 3px solid var(--boss-glow); }
+        @keyframes bossIdle { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-12px) scale(1.08); } }
+        .monster-image.hit { animation: monsterHit 0.5s ease forwards; }
+        @keyframes monsterHit { 0% { transform: scale(1); filter: brightness(1); } 20% { transform: scale(0.85) rotate(-5deg); filter: brightness(3) saturate(0); } 100% { transform: scale(1) rotate(0); filter: brightness(1); } }
+        .monster-image.miss { animation: monsterDodge 0.6s ease; }
+        @keyframes monsterDodge { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-30px); } 75% { transform: translateX(30px); } }
+        .monster-info { text-align: center; margin-top: 10px; }
+        .monster-hp-bar { width: 140px; height: 10px; background: rgba(15, 12, 20, 0.55); border: 2px solid var(--border-ornate); border-radius: 5px; overflow: hidden; margin: 0 auto 5px; }
+        .monster-hp-fill { height: 100%; background: linear-gradient(90deg, #8b0000, #ff4444); transition: width 0.3s; box-shadow: 0 0 10px #ff4444; }
+        .boss-mode .monster-hp-fill { background: linear-gradient(90deg, #7a6845, #b8963a, #c9a227); box-shadow: 0 0 15px var(--boss-glow); }
+        .monster-name { 
+            font-family: 'Cinzel', serif; 
+            color: var(--danger); 
+            font-size: 1rem; 
+            font-weight: 700;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(248, 113, 113, 0.4);
+            padding: 4px 16px;
+            background: rgba(15, 12, 20, 0.6);
+            border-radius: 20px;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            display: inline-block;
+            letter-spacing: 1px;
+        }
+        .boss-mode .monster-name { 
+            color: var(--boss-glow); 
+            text-shadow: 0 0 15px var(--boss-glow), 0 2px 8px rgba(0,0,0,0.9); 
+            font-size: 1.15rem; 
+            border-color: rgba(232, 197, 71, 0.4);
+            background: rgba(15, 12, 20, 0.7);
+            padding: 6px 20px;
+        }
+        .boss-badge { display: none; background: linear-gradient(135deg, #b8963a, #c9a227); color: #000; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 10px; margin-top: 5px; text-transform: uppercase; letter-spacing: 2px; }
+        .boss-mode .boss-badge { display: inline-block; }
+        
+        .question-area { padding: 0 15px 120px; max-width: 600px; margin: 0 auto; }
+        .question-box { 
+            background: linear-gradient(135deg, #faf8f3 0%, #ede5d5 100%); 
+            color: #1a1a1a; 
+            border-radius: 16px; 
+            padding: 24px 20px 20px; 
+            margin-bottom: 18px; 
+            position: relative; 
+            border: 3px solid var(--border-ornate); 
+            box-shadow: 0 12px 45px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.5); 
+        }
+        .question-code { position: absolute; top: -14px; left: 20px; background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-dim) 100%); color: var(--primary-dark); padding: 5px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; font-family: 'Cinzel', serif; box-shadow: 0 4px 12px rgba(0,0,0,0.35); }
+        .question-text { font-size: 0.95rem; line-height: 1.9; white-space: pre-wrap; word-break: keep-all; padding-top: 8px; color: #2a2a2a; }
+        .question-level { position: absolute; top: -14px; right: 20px; padding: 5px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; font-family: 'Cinzel', serif; box-shadow: 0 4px 12px rgba(0,0,0,0.35); }
+        .level-1 { background: linear-gradient(135deg, #27ae60, #1e8449); color: #fff; }
+        .level-1::before { content: '🌱 '; }
+        .level-2 { background: linear-gradient(135deg, #3498db, #2874a6); color: #fff; }
+        .level-2::before { content: '⚔️ '; }
+        .level-3 { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; }
+        .level-3::before { content: '🔥 '; }
+        .level-boss { background: linear-gradient(135deg, #b8963a, #c9a227); color: #000; }
+        .level-boss::before { content: '👑 '; }
+        .options-area { display: grid; gap: 12px; }
+        .option-btn { background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(28, 25, 38, 0.95) 100%); border: 2px solid var(--border-ornate); border-radius: 14px; padding: 16px 18px; text-align: left; font-family: 'Noto Serif KR', serif; font-size: 0.88rem; color: var(--text-light); cursor: pointer; transition: all 0.25s ease; position: relative; display: flex; align-items: center; gap: 14px; overflow: hidden; }
+        .option-btn::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(232, 197, 71, 0.15), transparent); transition: left 0.5s ease; }
+        .option-btn:hover:not(:disabled)::before { left: 100%; }
+        .option-btn:hover:not(:disabled) { border-color: var(--accent-gold); background: linear-gradient(135deg, rgba(232, 197, 71, 0.18) 0%, rgba(26, 26, 46, 0.95) 100%); transform: translateX(8px) scale(1.01); box-shadow: 0 4px 20px rgba(232, 197, 71, 0.2), inset 0 0 20px rgba(232, 197, 71, 0.05); }
+        .option-btn:disabled { cursor: default; }
+        .option-btn.selected { border-color: var(--accent-gold); background: linear-gradient(135deg, rgba(232, 197, 71, 0.25) 0%, rgba(26, 26, 46, 0.95) 100%); box-shadow: 0 0 25px rgba(232, 197, 71, 0.35), inset 0 0 30px rgba(232, 197, 71, 0.1); transform: translateX(5px); }
+        .option-number { width: 36px; height: 36px; background: linear-gradient(135deg, rgba(122, 104, 69, 0.6), rgba(122, 104, 69, 0.3)); border: 2px solid var(--border-ornate); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; font-family: 'Cinzel', serif; font-size: 1rem; transition: all 0.25s ease; }
+        .option-btn:hover:not(:disabled) .option-number { border-color: var(--accent-gold); background: linear-gradient(135deg, rgba(232, 197, 71, 0.3), rgba(122, 104, 69, 0.5)); transform: scale(1.1); }
+        .option-btn.selected .option-number { background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-dim)); color: var(--primary-dark); border-color: var(--accent-gold); box-shadow: 0 0 15px rgba(232, 197, 71, 0.5); transform: scale(1.15); }
+.option-text { flex: 1; line-height: 1.4; word-break: keep-all; }
+.option-btn:active:not(:disabled) { transform: translateX(3px) scale(0.98); }
+.option-btn.selected::after {
+    content: '⚔️ 선택';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(232, 197, 71, 0.25), rgba(232, 197, 71, 0.1));
+    border: 1px solid rgba(232, 197, 71, 0.6);
+    color: var(--accent-gold);
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    animation: selectedPulse 1.5s ease-in-out infinite;
+}
+@keyframes selectedPulse { 0%, 100% { box-shadow: 0 0 5px rgba(232, 197, 71, 0.3); } 50% { box-shadow: 0 0 15px rgba(232, 197, 71, 0.5); } }
+.option-btn.wrong { border-color: var(--danger); background: linear-gradient(135deg, rgba(192, 57, 43, 0.25) 0%, rgba(26, 26, 46, 0.95) 100%); box-shadow: 0 0 25px rgba(231, 76, 60, 0.3); }
+.option-btn.wrong .option-number { border-color: var(--danger); background: linear-gradient(135deg, rgba(231, 76, 60, 0.4), rgba(192, 57, 43, 0.2)); color: #ffdddd; }
+.option-btn.wrong::after { content: '💀 실패'; background: linear-gradient(135deg, rgba(192, 57, 43, 0.3), rgba(192, 57, 43, 0.1)); border-color: var(--danger); color: #ff8888; }
+.option-btn.correct { border-color: #27ae60; background: linear-gradient(135deg, rgba(39, 174, 96, 0.25) 0%, rgba(26, 26, 46, 0.95) 100%); box-shadow: 0 0 25px rgba(39, 174, 96, 0.3); }
+.option-btn.correct .option-number { border-color: #27ae60; background: linear-gradient(135deg, rgba(39, 174, 96, 0.4), rgba(30, 132, 73, 0.2)); color: #ddffea; }
+.option-btn.correct::after { content: '⚔️ 처치'; background: linear-gradient(135deg, rgba(39, 174, 96, 0.3), rgba(39, 174, 96, 0.1)); border-color: #27ae60; color: #88ff99; }
+        .feedback-area { margin-top: 15px; text-align: center; }
+        .feedback-btn { background: transparent; border: 1px dashed var(--text-dim); color: var(--text-dim); padding: 8px 16px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: all 0.3s; }
+        .feedback-btn:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+
+        .attack-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; opacity: 0; z-index: 200; }
+        .attack-overlay.hit { background: radial-gradient(circle at 50% 35%, rgba(255, 215, 0, 0.4) 0%, transparent 50%); animation: hitFlash 0.4s ease; }
+        .attack-overlay.miss { background: radial-gradient(circle at 50% 35%, rgba(100, 100, 100, 0.3) 0%, transparent 50%); animation: missFlash 0.4s ease; }
+        @keyframes hitFlash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes missFlash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+        .attack-text { position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%); font-family: 'Cinzel', serif; font-size: 3.5rem; font-weight: 900; pointer-events: none; opacity: 0; z-index: 202; text-shadow: 0 0 30px currentColor, 0 4px 0 rgba(0,0,0,0.5); }
+        .attack-text.hit { color: var(--accent-gold); animation: attackTextHit 0.7s ease forwards; }
+        .attack-text.miss { color: #888; animation: attackTextMiss 0.7s ease forwards; }
+        @keyframes attackTextHit { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } 40% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); } 100% { opacity: 0; transform: translate(-50%, -60%) scale(1); } }
+        @keyframes attackTextMiss { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } 40% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -40%) scale(0.9); } }
+        .damage-number { position: fixed; top: 25%; left: 50%; transform: translateX(-50%); font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: 900; pointer-events: none; opacity: 0; z-index: 203; }
+        .damage-number.hit { color: #ff4444; text-shadow: 0 0 10px #ff0000, 2px 2px 0 #000; animation: damageFloat 0.8s ease-out forwards; }
+        .damage-number.miss { color: #aaa; text-shadow: 2px 2px 0 #000; animation: damageFloat 0.8s ease-out forwards; }
+        @keyframes damageFloat { 0% { opacity: 0; transform: translateX(-50%) translateY(0) scale(0.5); } 30% { opacity: 1; transform: translateX(-50%) translateY(-20px) scale(1.2); } 100% { opacity: 0; transform: translateX(-50%) translateY(-60px) scale(1); } }
+        .particle { position: fixed; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; z-index: 201; }
+        .particle.gold { background: var(--accent-gold); box-shadow: 0 0 10px var(--accent-gold); }
+        
+        .pause-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.97); display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 300; }
+        .pause-overlay.active { display: flex; }
+        .pause-title { font-family: 'Cinzel', serif; font-size: 2.2rem; color: var(--accent-gold); margin-bottom: 10px; }
+        .pause-subtitle { color: var(--text-dim); margin-bottom: 40px; font-style: italic; }
+        .pause-buttons { display: flex; flex-direction: column; gap: 12px; }
+        .pause-btn { background: rgba(122, 104, 69, 0.6); border: 2px solid var(--accent-gold); color: var(--accent-gold); padding: 14px 45px; border-radius: 10px; font-family: 'Cinzel', serif; font-size: 1rem; cursor: pointer; transition: all 0.3s; }
+        .pause-btn:hover { background: var(--accent-gold); color: var(--primary-dark); }
+        .pause-btn.danger { border-color: var(--danger); color: var(--danger); background: transparent; }
+        .pause-btn.danger:hover { background: var(--danger); color: #fff; }
+        
+        #result-screen { background: radial-gradient(ellipse at center, #1e1b2e 0%, #14121c 100%); text-align: center; padding: 30px 20px 100px; min-height: 100vh; }
+        .result-header { margin-bottom: 30px; }
+        .result-icon { font-size: 4.5rem; margin-bottom: 15px; animation: resultIcon 1s ease; }
+        @keyframes resultIcon { 0% { transform: scale(0) rotate(-180deg); opacity: 0; } 60% { transform: scale(1.2) rotate(10deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+        .result-title { font-family: 'Cinzel', serif; font-size: 2.2rem; color: var(--accent-gold); margin-bottom: 8px; text-shadow: 0 0 30px rgba(232, 197, 71, 0.4); }
+        .result-subtitle { color: var(--text-ancient); font-style: italic; font-size: 0.95rem; padding: 6px 16px; background: rgba(0,0,0,0.3); border-radius: 15px; display: inline-block; }
+        .result-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; max-width: 400px; margin: 20px auto 25px; }
+        .stat-card { background: var(--card-bg); border: 1px solid var(--border-ornate); border-radius: 14px; padding: 18px 12px; transition: all 0.3s ease; }
+        .stat-card:hover { border-color: var(--accent-gold); transform: translateY(-2px); }
+        .stat-value { font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: 700; color: var(--accent-gold); }
+        .stat-label { font-size: 0.8rem; color: var(--text-dim); margin-top: 5px; }
+        .result-details { background: var(--card-bg); border: 1px solid var(--border-ornate); border-radius: 14px; padding: 18px; max-width: 500px; margin: 0 auto 25px; text-align: left; max-height: 280px; overflow-y: auto; }
+        .detail-title { font-family: 'Cinzel', serif; font-size: 1.05rem; color: var(--accent-gold); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(232, 197, 71, 0.2); }
+        .detail-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 8px; border-bottom: 1px solid rgba(122, 104, 69, 0.25); font-size: 0.88rem; border-radius: 6px; transition: background 0.2s; }
+        .detail-item:hover { background: rgba(232, 197, 71, 0.05); }
+        .detail-item:last-child { border-bottom: none; }
+        .detail-item.wrong { color: var(--danger); }
+        .detail-item.correct { color: var(--success); }
+        .detail-item .boss-icon { color: var(--boss-glow); margin-left: 5px; }
+        
+        #archive-screen, #settings-screen { background: linear-gradient(180deg, var(--primary-dark) 0%, #100e18 100%); padding: 20px; padding-top: 80px; padding-bottom: 100px; }
+        .archive-bank-toggle{display:flex;gap:8px;margin:10px 0 14px 0;}
+        .bank-btn{flex:1;background:rgba(28,25,38,0.7);border:1px solid rgba(212,175,55,0.25);color:var(--text-light);padding:10px 12px;border-radius:10px;font-family:'Cinzel',serif;font-size:0.85rem;cursor:pointer;transition:all 0.2s ease;}
+        .bank-btn.active{border-color:var(--accent-gold);box-shadow:0 0 0 2px rgba(212,175,55,0.15) inset;color:var(--accent-gold);}
+
+        .archive-tabs { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 10px; }
+        .archive-tab { background: rgba(28,25,38,0.5); border: 1px solid var(--border-ornate); color: var(--text-dim); padding: 10px 14px; border-radius: 20px; font-size: 0.8rem; cursor: pointer; white-space: nowrap; transition: all 0.3s; font-family: 'Noto Serif KR', serif; }
+        .archive-tab.active { background: var(--accent-gold); border-color: var(--accent-gold); color: var(--primary-dark); }
+        .archive-content, .settings-card { background: var(--card-bg); border: 1px solid var(--border-ornate); border-radius: 12px; padding: 20px; }
+        .archive-summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+        .archive-question-list { max-height: 350px; overflow-y: auto; }
+        .archive-question { background: rgba(20,18,28,0.5); border: 1px solid rgba(122, 104, 69, 0.35); border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.3s; }
+        .archive-question:hover { background: rgba(232, 197, 71, 0.12); border-color: var(--accent-gold); }
+        .archive-question-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .archive-question-code { color: var(--accent-gold); font-weight: 700; font-family: 'Cinzel', serif; font-size: 0.9rem; }
+        .archive-question-stats { font-size: 0.75rem; color: var(--text-dim); }
+        .archive-question-text { font-size: 0.8rem; color: var(--text-light); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .stats-breakdown { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+        .breakdown-card { background: rgba(20,18,28,0.5); border: 1px solid rgba(122, 104, 69, 0.35); border-radius: 8px; padding: 12px; text-align: center; }
+        .breakdown-value { font-family: 'Cinzel', serif; font-size: 1.3rem; color: var(--accent-gold); }
+        .breakdown-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 3px; }
+        .notes-section { margin-top: 20px; }
+        .notes-title { font-family: 'Cinzel', serif; color: var(--accent-gold); margin-bottom: 10px; font-size: 1rem; }
+        .notes-textarea, .feedback-textarea { width: 100%; min-height: 120px; background: rgba(20,18,28,0.5); border: 1px solid var(--border-ornate); border-radius: 8px; padding: 12px; color: var(--text-light); font-family: 'Noto Serif KR', serif; font-size: 0.85rem; resize: vertical; }
+        .notes-textarea:focus, .feedback-textarea:focus { outline: none; border-color: var(--accent-gold); }
+        .btn-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .action-btn { flex: 1; min-width: 120px; background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-dim) 100%); border: none; color: var(--primary-dark); padding: 10px 15px; border-radius: 8px; cursor: pointer; font-family: 'Noto Serif KR', serif; font-weight: 700; font-size: 0.85rem; transition: all 0.3s; }
+        .action-btn:hover { box-shadow: 0 0 20px rgba(232, 197, 71, 0.4); }
+        .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(122, 104, 69, 0.35); }
+        .setting-item:last-child { border-bottom: none; }
+        .setting-label { color: var(--text-light); font-size: 0.9rem; }
+        .setting-select { background: var(--primary-dark); color: var(--accent-gold); border: 1px solid var(--accent-gold); padding: 8px 12px; border-radius: 6px; font-family: 'Noto Serif KR', serif; font-size: 0.85rem; }
+        .setting-btn { background: transparent; border: 1px solid var(--danger); color: var(--danger); padding: 8px 14px; border-radius: 6px; cursor: pointer; font-family: 'Noto Serif KR', serif; font-size: 0.85rem; transition: all 0.3s; }
+        .setting-btn:hover { background: var(--danger); color: #fff; }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 400; padding: 20px; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: linear-gradient(135deg, var(--secondary-dark) 0%, var(--primary-dark) 100%); border: 2px solid var(--border-ornate); border-radius: 16px; padding: 20px; width: 100%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .modal-title { font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--accent-gold); }
+        .modal-close { background: none; border: none; color: var(--text-light); font-size: 1.5rem; cursor: pointer; }
+        .feedback-submit { width: 100%; background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-dim) 100%); border: none; color: var(--primary-dark); padding: 12px; border-radius: 8px; font-family: 'Cinzel', serif; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
+        .question-detail-box { background: linear-gradient(135deg, #f8f5ef 0%, #e8e0d0 100%); color: #1a1a1a; border-radius: 10px; padding: 15px; margin-bottom: 12px; border: 2px solid var(--border-ornate); }
+        .detail-option { padding: 10px 12px; background: rgba(0,0,0,0.05); border-radius: 6px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; font-size: 0.85rem; }
+        .detail-option.correct { background: rgba(46, 204, 113, 0.2); border: 1px solid var(--success); }
+        .sound-toggle { position: fixed; bottom: 20px; right: 20px; background: var(--card-bg); border: 1px solid var(--border-ornate); border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 50; font-size: 1.2rem; transition: all 0.3s; }
+        .sound-toggle:hover { border-color: var(--accent-gold); background: rgba(232, 197, 71, 0.2); }
+        .sound-toggle.muted { opacity: 0.5; }
+        @media (max-width: 480px) { .home-title { font-size: 2rem; letter-spacing: 2px; } }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--primary-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--accent-gold-dim); border-radius: 3px; }
+    
+        /* Note: previous "set-select background" override removed.
+           dungeon-rooms.jpg is now used consistently and kept visible.
+        */
+
+    </style>
+</head>
+<body>
+
+    <!-- BGM: must be inside <body> for reliable DOM access on mobile -->
+    <audio id="bgm" loop preload="auto" playsinline>
+        <source src="assets/entrance-bgm.mp3" type="audio/mpeg">
+    </audio>
+<div class="dungeon-enter-overlay" id="dungeon-enter-overlay">
+        <div class="enter-icon" id="enter-icon">🚪</div>
+        <div class="enter-text" id="enter-text">기초의 미궁</div>
+        <div class="enter-subtitle" id="enter-subtitle">던전에 입장합니다...</div>
+        <div class="enter-dots"><div class="enter-dot"></div><div class="enter-dot"></div><div class="enter-dot"></div></div>
+    </div>
+
+    <div id="home-screen" class="screen active">
+        <div class="home-content">
+            <h1 class="home-title">PSAT DUNGEON</h1>
+            <p class="home-subtitle">— 지식의 던전에서 몬스터를 처치하라 —</p>
+            <div class="dungeon-grid">
+                <div class="dungeon-card" onclick="selectDungeon('regular')">
+                    <img class="dungeon-icon-img dungeon-icon-regular" src="assets/icon-maze.jpg" alt="기초의 미궁 아이콘">
+                    <div class="dungeon-name" id="dungeon-name-regular">기초의 미궁</div>
+                    <div class="dungeon-desc">기초를 증명해라.</div>
+                </div>
+                <div class="dungeon-card" id="special-dungeon" onclick="selectDungeon('special')">
+                    <img class="dungeon-icon-img dungeon-icon-special" src="assets/icon-tower.jpg" alt="결정의 탑 아이콘">
+                    <div class="dungeon-name" id="dungeon-name-special">결정의 탑</div>
+                    <div class="dungeon-desc" id="special-desc">실전만 남긴 곳이다.</div>
+                </div>
+                <div class="dungeon-card" id="weakness-dungeon" onclick="selectDungeon('weakness')">
+                    <img class="dungeon-icon-img dungeon-icon-weakness" src="assets/icon-weakness.jpg" alt="약점의 밀실 아이콘">
+                    <div class="dungeon-name" id="dungeon-name-weakness">약점의 밀실</div>
+                    <div class="dungeon-desc" id="weakness-desc">익숙한 실패로 와라.</div>
+                </div>
+            </div>
+            <div class="nav-buttons">
+                <button class="nav-btn" onclick="showScreen('archive-screen')"><i class="ph-bold ph-scroll"></i> 아카이브</button>
+                <button class="nav-btn" onclick="showScreen('settings-screen')"><i class="ph-bold ph-gear"></i> 설정</button>
+                <button class="nav-btn" onclick="showScreen('system-report-screen')"><i class="ph-bold ph-scroll"></i> 사서의 보고</button>
+                <button class="nav-btn" id="install-btn" style="display:none;" type="button">⬇️ 앱 다운로드</button>
+            </div>
+        </div>
+    </div>
+    
+    
+    <div id="weakness-select-screen" class="screen has-fixed-header">
+        <div class="screen-header">
+            <button class="back-btn" onclick="showScreen('home-screen')">←</button>
+            <h2 class="screen-title">약점의 밀실</h2>
+        </div>
+        <div class="set-description" style="margin-top: 6px; text-align:center;">
+            <p style="color: var(--text-ancient); margin-bottom: 10px;">익숙한 실패로 와라.</p>
+        </div>
+        <div class="dungeon-grid" style="margin-top: 10px;">
+            <div class="dungeon-card" id="weakness-select-regular">
+                <img class="dungeon-icon-img dungeon-icon-regular" src="assets/icon-maze.jpg" alt="기초의 미궁">
+                <div class="dungeon-name">기초의 미궁</div>
+                <div class="dungeon-desc" id="weakness-select-regular-desc">미궁의 약점을 추적한다.</div>
+            </div>
+            <div class="dungeon-card" id="weakness-select-special">
+                <img class="dungeon-icon-img dungeon-icon-special" src="assets/icon-tower.jpg" alt="결정의 탑">
+                <div class="dungeon-name">결정의 탑</div>
+                <div class="dungeon-desc" id="weakness-select-special-desc">탑의 약점을 추적한다.</div>
+            </div>
+        </div>
+    </div>
+
+<div id="set-select-screen" class="screen has-fixed-header">
+        <div class="screen-header">
+            <button class="back-btn" onclick="showScreen('home-screen')">←</button>
+            <h2 class="screen-title">문제 세트 선택</h2>
+        </div>
+        <div id="set-list-container"></div>
+    </div>
+    
+    <div id="battle-screen" class="screen">
+        <div class="battle-header">
+            <div class="battle-top">
+                <span class="battle-progress" id="battle-progress">1 / 30</span>
+                <span class="battle-timer" id="battle-timer">00:00</span>
+                <button class="control-btn" onclick="togglePause()">⏸️</button>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+        </div>
+        <div class="monster-area">
+            <div class="monster-container">
+                <img src="assets/psat_monsters/folder1/stage1_bg_01.png" alt="Monster" class="monster-image" id="monster-image">
+            </div>
+            <div class="monster-info">
+                <div class="monster-hp-bar"><div class="monster-hp-fill" id="monster-hp-fill" style="width: 100%"></div></div>
+                <div class="monster-name" id="monster-name">문제 괴물</div>
+                <div class="boss-badge">⚠️ BOSS</div>
+            </div>
+        </div>
+        <div class="question-area" id="question-area">
+            <div class="question-box">
+                <span class="question-code" id="question-code">A1-01</span>
+                <span class="question-level level-1" id="question-level">Lv.1</span>
+                <p class="question-text" id="question-text">문제 로딩중...</p>
+            </div>
+            <div class="options-area" id="options-area"></div>
+            <div class="feedback-area"><button class="feedback-btn" onclick="openFeedback()"><i class="ph-bold ph-notebook"></i> 문제 전투 보고</button></div>
+        </div>
+        <div class="attack-overlay" id="attack-overlay"></div>
+        <div class="attack-text" id="attack-text">HIT!</div>
+        <div class="damage-number" id="damage-number">-100</div>
+        <div class="pause-overlay" id="pause-overlay">
+            <h2 class="pause-title">⏸ PAUSED</h2>
+            <p class="pause-subtitle">던전 탐험이 일시 중지되었습니다</p>
+            <div class="pause-buttons">
+                <button class="pause-btn" onclick="togglePause()"><i class="ph-bold ph-sword"></i> 계속하기</button>
+                <button class="pause-btn danger" onclick="exitBattle()">🚪 던전 탈출</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="result-screen" class="screen">
+        <div class="result-header">
+            <div class="result-icon"><i class="ph-fill ph-trophy" style="font-size:4rem;color:var(--accent-gold);"></i></div>
+            <h1 class="result-title">던전 클리어!</h1>
+            <p class="result-subtitle" id="result-subtitle">진리의 시험장 완료</p>
+        </div>
+        <div class="result-stats">
+            <div class="stat-card"><div class="stat-value" id="result-correct">0</div><div class="stat-label"><i class="ph-bold ph-sword"></i> 처치</div></div>
+            <div class="stat-card"><div class="stat-value" id="result-wrong">0</div><div class="stat-label"><i class="ph-bold ph-skull"></i> 실패</div></div>
+            <div class="stat-card"><div class="stat-value" id="result-accuracy">0%</div><div class="stat-label">📊 정답률</div></div>
+        </div>
+        <div class="result-stats" style="margin-bottom: 20px;">
+            <div class="stat-card"><div class="stat-value" id="result-time">00:00</div><div class="stat-label"><i class="ph-bold ph-hourglass"></i> 총 시간</div></div>
+            <div class="stat-card"><div class="stat-value" id="result-avg-time">00s</div><div class="stat-label"><i class="ph-bold ph-timer"></i> 평균</div></div>
+            <div class="stat-card"><div class="stat-value" id="result-boss">0</div><div class="stat-label"><i class="ph-fill ph-crown"></i> 보스</div></div>
+        </div>
+        <div class="result-details">
+            <h3 class="detail-title"><i class="ph-bold ph-scroll"></i> 전투 기록</h3>
+            <div id="result-detail-list"></div>
+        </div>
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="showScreen('home-screen')"><i class="ph-bold ph-house"></i> 귀환</button>
+            <button class="nav-btn" onclick="showScreen('archive-screen')"><i class="ph-bold ph-scroll"></i> 아카이브</button>
+        </div>
+    </div>
+    
+    <div id="archive-screen" class="screen has-fixed-header">
+        <div class="screen-header">
+            <button class="back-btn" onclick="showScreen('home-screen')">←</button>
+            <h2 class="screen-title"><i class="ph-bold ph-scroll"></i> 기록의 전당</h2>
+        </div>
+        <div class="archive-bank-toggle" id="archive-bank-toggle">
+            <button class="bank-btn active" data-bank="regular" onclick="setArchiveBank('regular')">기초의 미궁</button>
+            <button class="bank-btn" data-bank="special" onclick="setArchiveBank('special')">결정의 탑</button>
+        </div>
+        <div class="archive-tabs" id="archive-tabs">
+            <button class="archive-tab active" data-tab="summary"><i class="ph-bold ph-chart-line-up"></i> 통계</button>
+            <button class="archive-tab" data-tab="questions"><i class="ph-bold ph-books"></i> 문제도감</button>
+            <button class="archive-tab" data-tab="weakness"><i class="ph-bold ph-skull"></i> 균열목록</button>
+            <button class="archive-tab" data-tab="feedback"><i class="ph-bold ph-notebook"></i> 전투보고</button>
+                    </div>
+
+        <div class="archive-content" id="archive-content"></div>
+    </div>
+    
+    <div id="settings-screen" class="screen has-fixed-header">
+        <div class="screen-header">
+            <button class="back-btn" onclick="showScreen('home-screen')">←</button>
+            <h2 class="screen-title"><i class="ph-bold ph-gear"></i> 설정</h2>
+        </div>
+        <div class="settings-card">
+            <div class="setting-item"><span class="setting-label">문제 수</span><select id="setting-question-count" class="setting-select"><option value="10">10문제</option><option value="20">20문제</option><option value="30" selected>30문제</option><option value="50">50문제</option></select></div>
+            <div class="setting-item"><span class="setting-label">타이머 경고 (초)</span><select id="setting-timer-warning" class="setting-select"><option value="60">60초</option><option value="90" selected>90초</option><option value="120">120초</option><option value="0">끄기</option></select></div>
+            <div class="setting-item"><span class="setting-label">보스 등장 간격</span><select id="setting-boss-interval" class="setting-select"><option value="5">5문제마다</option><option value="10" selected>10문제마다</option><option value="0">끄기</option></select></div>
+            <div class="setting-item"><span class="setting-label">효과음</span><select id="setting-sound" class="setting-select"><option value="1" selected>켜기</option><option value="0">끄기</option></select></div>
+            <div class="setting-item"><span class="setting-label">데이터 초기화</span><button onclick="resetAllData()" class="setting-btn">초기화</button></div>
+        </div>
+    </div>
+    
+
+    <div id="system-report-screen" class="screen has-fixed-header">
+        <div class="screen-header">
+            <button class="back-btn" onclick="showScreen('home-screen')">←</button>
+            <h2 class="screen-title"><i class="ph-bold ph-scroll"></i> 사서의 보고</h2>
+        </div>
+
+        <div class="settings-card" style="margin-top: 10px;">
+            <div style="margin-bottom: 14px;">
+                <h3 style="font-family:'Cinzel',serif;color:var(--accent-gold);margin-bottom:8px;"><i class="ph-bold ph-books"></i> 사서의 기록</h3>
+                <p style="color:var(--text-dim);font-size:0.8rem;line-height:1.5;">
+                    특정 탑(기초의 미궁/결정의 탑) 전투기록과 분리된, <b>앱/시스템 전반</b>에 대한 평가 기록입니다.
+                    (예: 등급별 몬스터 배치, 세트 구조, UI/UX, 데이터 내보내기 방식 등)
+                </p>
+            </div>
+
+            <textarea class="notes-textarea" id="system-review-text" placeholder="예시:
+- 문제 유형(논리/비논리) 분리가 잘 되었는가?
+- 현세/구시대 문제의 업데이트 흐름은 적절한가?
+- 전투보고/통계/아카이브 UX 개선점
+- Claude에게 요청할 개선/기능 추가
+"></textarea>
+
+            <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                <button class="feedback-submit" onclick="saveSystemReview()"><i class="ph-bold ph-floppy-disk"></i> 저장</button>
+                <button class="setting-btn" onclick="exportSystemReviewJSON()" style="border:1px solid rgba(212,175,55,0.35);"><i class="ph-bold ph-export"></i> 사서의 보고만 내보내기</button>
+            </div>
+
+            <!-- 전체 통합 내보내기 섹션 -->
+            <div style="margin-top:20px;padding:18px;background:linear-gradient(135deg, rgba(232,197,71,0.12), rgba(232,197,71,0.05));border:2px solid var(--accent-gold);border-radius:12px;">
+                <h4 style="color:var(--accent-gold);font-size:1rem;margin-bottom:12px;"><i class="ph-bold ph-files"></i> 전체 통합 내보내기</h4>
+                <p style="color:var(--text-light);font-size:0.85rem;line-height:1.6;margin-bottom:15px;">
+                    <b>사서의 보고</b> + <b>모든 전투보고</b> + <b>메모</b> + <b>통계</b>를<br>
+                    하나의 JSON 파일로 내보냅니다.
+                </p>
+                <button class="feedback-submit" onclick="exportAllWithLibrarianReport()" style="width:100%;background:linear-gradient(135deg, var(--accent-gold), var(--accent-gold-dim));font-size:0.95rem;padding:14px;">
+                    <i class="ph-bold ph-download-simple"></i> 전체 기록 통합 내보내기
+                </button>
+                <p style="color:var(--text-dim);font-size:0.7rem;margin-top:10px;text-align:center;">
+                    기초의 미궁 + 결정의 탑 + 사서의 보고 포함
+                </p>
+            </div>
+
+            <div style="margin-top:18px;padding:15px;background:rgba(94,234,212,0.08);border:1px solid rgba(94,234,212,0.3);border-radius:10px;">
+                <h4 style="color:var(--success);font-size:0.9rem;margin-bottom:10px;"><i class="ph-bold ph-info"></i> 안내</h4>
+                <p style="color:var(--text-dim);font-size:0.8rem;line-height:1.5;">
+                    탑별 전투기록/통계/학습기록은 <b>아카이브</b>에서 개별 확인할 수 있습니다.<br>
+                    전체 통합 내보내기를 사용하면 모든 기록을 한 번에 저장합니다.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="feedback-modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 class="modal-title"><i class="ph-bold ph-notebook"></i> 문제 전투 보고</h3><button class="modal-close" onclick="closeFeedback()">×</button></div>
+            <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 12px;">문제 코드: <span id="feedback-code" style="color: var(--accent-gold);"></span></p>
+            <textarea class="feedback-textarea" id="feedback-text" placeholder="문제의 오류나 개선 방안을 작성해주세요."></textarea>
+            <button class="feedback-submit" onclick="submitFeedback()">전투 보고 저장</button>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="question-detail-modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 class="modal-title"><i class="ph-bold ph-book-open"></i> 문제 상세</h3><button class="modal-close" onclick="closeQuestionDetail()">×</button></div>
+            <div id="question-detail-content"></div>
+        </div>
+</div>
+
+    <div class="modal-overlay" id="weakness-path-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="ph-bold ph-key"></i> 약점의 밀실</h3>
+                <button class="modal-close" onclick="closeWeaknessPath()">×</button>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 14px;">익숙한 실패로 와라.</p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="feedback-submit" id="weakness-path-regular" onclick="startWeaknessRun('regular')">기초의 미궁 · 약점 추적</button>
+                <button class="feedback-submit" id="weakness-path-special" onclick="startWeaknessRun('special')">결정의 탑 · 약점 추적</button>
+                <button class="setting-btn" style="width:100%; margin-top: 6px;" onclick="closeWeaknessPath()">취소</button>
+            </div>
+        </div>
+    </div>
+
+    </div>
+    
+        <div class="bgm-toggle" id="bgm-toggle" onclick="toggleBGM()">🎵</div>
+<div class="sound-toggle" id="sound-toggle" onclick="toggleSound()">🔊</div>
+
+    <script>
+        let allQuestions = [];
+        let specialQuestions = [];
+        let questionsByDate = {};
+        let specialQuestionsByDate = {};
+        let currentDateKey = null;
+        let currentDungeonType = 'regular';
+        let archiveBank = 'regular';
+        let currentQuestions = [];
+        let currentIndex = 0;
+        let questionTimer = 0;
+        let totalTimer = 0;
+        let timerInterval = null;
+        let isPaused = false;
+        let battleResults = [];
+        let isBossQuestion = false;
+        let soundEnabled = true;
+        let audioContext = null;
+        let entranceBGM = null;
+        let bgmUnlocked = false;
+        let settings = { questionCount: 30, timerWarning: 90, bossInterval: 10, sound: true, bgm: true };
+        
+        // Dungeon display names (editable)
+        let REGULAR_DUNGEON_NAME = '기초의 미궁';
+        let WEAKNESS_DUNGEON_NAME = '약점의 밀실';
+        let SPECIAL_DUNGEON_NAME = '결정의 탑';
+
+        
+        const MONSTER_IMAGES = [
+            'assets/psat_monsters/folder1/stage1_bg_01.png', 
+            'assets/psat_monsters/folder1/stage1_bg_02.png', 
+            'assets/psat_monsters/folder1/stage1_bg_03.png', 
+            'assets/psat_monsters/folder1/stage1_bg_04.png'
+        ];
+        const BOSS_IMAGES = [
+            'assets/psat_monsters/boss/boss_1.png', 
+            'assets/psat_monsters/boss/boss_2.png', 
+            'assets/psat_monsters/boss/boss_3.png',
+            'assets/psat_monsters/boss/boss_4.png'
+        ];
+        const MONSTER_NAMES = ['비율 고블린', '문헌 쥐덫', '불꽃 산술령', '지식의 미믹'];
+        const BOSS_NAMES = ['심연의 계산왕', '업화의 논리군주', '태고의 공식수호자', '확률의 마녀'];
+        const STORAGE_KEYS = { QUESTION_STATS: 'psat_question_stats', BATTLE_HISTORY: 'psat_battle_history', FEEDBACKS: 'psat_feedbacks', NOTES: 'psat_notes', QUESTION_STATS_SPECIAL: 'psat_question_stats_special', BATTLE_HISTORY_SPECIAL: 'psat_battle_history_special', FEEDBACKS_SPECIAL: 'psat_feedbacks_special', NOTES_SPECIAL: 'psat_notes_special', SETTINGS: 'psat_settings', UI_STATE: 'psat_ui_state' };
+
+        // ===== DUNGEON ROOM BACKGROUND (PERSISTENT) =====
+        function applyDungeonRoomBackground(type) {
+            const safeType = (type === 'special' || type === 'weakness_special') ? 'special' : ((type === 'weakness') ? 'weakness' : 'regular');
+            const battle = document.getElementById('battle-screen');
+            const setSelect = document.getElementById('set-select-screen');
+            if (battle) battle.dataset.dungeon = safeType;
+            if (setSelect) setSelect.dataset.dungeon = safeType;
+            localStorage.setItem(STORAGE_KEYS.UI_STATE, JSON.stringify({ lastDungeonType: safeType }));
+        }
+
+        // ===== DATA MIGRATION: OLD RECORDS -> CURRENT QUESTION BANK =====
+        // Past battle history may reference question IDs from older questions.json builds.
+        // This migrates history/feedbacks/stats by matching on question code (stable identifier).
+        function migrateStoredDataToCurrentQuestionBank() {
+            try {
+                const history = getBattleHistory();
+                if (!Array.isArray(history) || history.length === 0) return;
+
+                const codeToQuestion = new Map(allQuestions.map(q => [q.code, q]));
+                const questionIdSet = new Set(allQuestions.map(q => Number(q.id)));
+
+                // Determine whether migration is necessary.
+                let needsMigration = false;
+                for (const h of history) {
+                    const results = Array.isArray(h.results) ? h.results : [];
+                    for (const r of results) {
+                        const qid = Number(r.questionId);
+                        if (!questionIdSet.has(qid)) { needsMigration = true; break; }
+                    }
+                    if (needsMigration) break;
+                    // Also migrate regular dungeon dateKey to the current (latest) group.
+                    if (h.type === 'regular' && h.dateKey && h.dateKey !== 'epoch_recent') {
+                        needsMigration = true;
+                        break;
+                    }
+                }
+
+                const feedbacksRaw = JSON.parse(localStorage.getItem(STORAGE_KEYS.FEEDBACKS) || '{}');
+                if (!needsMigration && feedbacksRaw && typeof feedbacksRaw === 'object') {
+                    for (const [qidStr, fb] of Object.entries(feedbacksRaw)) {
+                        const qid = Number(qidStr);
+                        if (!questionIdSet.has(qid) && fb?.code && codeToQuestion.has(fb.code)) {
+                            needsMigration = true;
+                            break;
+                        }
+                    }
+                }
+                if (!needsMigration) return;
+
+                // 1) Migrate battle history questionId by code and normalize dateKey.
+                const migratedHistory = history.map(h => {
+                    const results = Array.isArray(h.results) ? h.results : [];
+                    const migratedResults = results.map(r => {
+                        const match = r?.code ? codeToQuestion.get(r.code) : null;
+                        return match ? { ...r, questionId: match.id } : r;
+                    });
+                    const dateKey = (h.type === 'regular') ? 'epoch_recent' : h.dateKey;
+                    return { ...h, dateKey, results: migratedResults };
+                });
+                localStorage.setItem(STORAGE_KEYS.BATTLE_HISTORY, JSON.stringify(migratedHistory));
+
+                // 2) Rebuild question stats from migrated history (ensures stats align to current IDs).
+                const rebuiltStats = {};
+                for (const h of migratedHistory) {
+                    const results = Array.isArray(h.results) ? h.results : [];
+                    for (const r of results) {
+                        const qid = Number(r.questionId);
+                        if (!qid || !questionIdSet.has(qid)) continue;
+                        if (!rebuiltStats[qid]) rebuiltStats[qid] = { attempts: 0, correct: 0, wrong: 0, totalTime: 0, avgTime: 0 };
+                        rebuiltStats[qid].attempts += 1;
+                        rebuiltStats[qid].totalTime += Number(r.time || 0);
+                        if (r.isCorrect) rebuiltStats[qid].correct += 1;
+                        else rebuiltStats[qid].wrong += 1;
+                    }
+                }
+                Object.keys(rebuiltStats).forEach(qid => {
+                    const s = rebuiltStats[qid];
+                    s.avgTime = s.attempts > 0 ? Math.round(s.totalTime / s.attempts) : 0;
+                });
+                localStorage.setItem(STORAGE_KEYS.QUESTION_STATS, JSON.stringify(rebuiltStats));
+
+                // 3) Migrate feedback keys by code (best-effort).
+                if (feedbacksRaw && typeof feedbacksRaw === 'object') {
+                    const migratedFeedbacks = {};
+                    for (const [oldId, fb] of Object.entries(feedbacksRaw)) {
+                        const match = fb?.code ? codeToQuestion.get(fb.code) : null;
+                        const newId = match ? String(match.id) : String(oldId);
+                        migratedFeedbacks[newId] = fb;
+                    }
+                    localStorage.setItem(STORAGE_KEYS.FEEDBACKS, JSON.stringify(migratedFeedbacks));
+                }
+            } catch (e) {
+                console.log('Migration skipped:', e);
+            }
+        }
+        
+        function initAudio() { 
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+// 홈 화면에서 BGM 자동 재생을 위해 showScreen 함수 수정
+
+// Screen navigation helper
+// 요구사항: 버튼 클릭으로 "생성되는 페이지(=화면)"로 자동 이동(스크롤/포커스 포함)
+function showScreen(screenId, opts = {}) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById(screenId);
+    if (!target) return;
+    target.classList.add('active');
+
+    // Update URL hash/history so the view is truly "moved" to the new screen.
+    // This also makes Back button behavior intuitive.
+    if (!opts.skipHistory) {
+        try {
+            const hash = `#${screenId}`;
+            if (location.hash !== hash) {
+                history.pushState({ screenId }, '', hash);
+            }
+        } catch (_) {}
+    }
+
+    // Ensure viewport moves to the newly activated screen
+    // (Some mobiles keep scroll position when content changes.)
+    requestAnimationFrame(() => {
+        try { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch (_) { window.scrollTo(0, 0); }
+        try { target.scrollIntoView({ block: 'start', behavior: 'auto' }); } catch (_) {}
+    });
+
+    // 홈 화면으로 돌아갈 때 BGM 재생
+    if (screenId === 'home-screen' && entranceBGM && bgmUnlocked && settings.bgm) {
+        entranceBGM.play().catch(() => {});
+    }
+
+    if (screenId === 'archive-screen') renderArchive('summary');
+
+    if (screenId === 'system-report-screen') {
+        renderSystemReviewScreen();
+    }
+}
+
+// Hash/back-button navigation
+window.addEventListener('popstate', () => {
+    const id = (history.state && history.state.screenId) ? history.state.screenId : (location.hash ? location.hash.slice(1) : 'home-screen');
+    showScreen(id || 'home-screen', { skipHistory: true });
+});
+        
+        function playSound(type) {
+            if (!soundEnabled || !settings.sound) return;
+            initAudio();
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain); gain.connect(audioContext.destination);
+            if (type === 'hit') { osc.frequency.setValueAtTime(800, audioContext.currentTime); osc.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1); gain.gain.setValueAtTime(0.3, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2); osc.start(); osc.stop(audioContext.currentTime + 0.2); }
+            else if (type === 'miss') { osc.frequency.setValueAtTime(200, audioContext.currentTime); osc.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.15); gain.gain.setValueAtTime(0.2, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15); osc.start(); osc.stop(audioContext.currentTime + 0.15); }
+            else if (type === 'boss') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioContext.currentTime); osc.frequency.exponentialRampToValueAtTime(300, audioContext.currentTime + 0.3); gain.gain.setValueAtTime(0.2, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5); osc.start(); osc.stop(audioContext.currentTime + 0.5); }
+            else if (type === 'enter') { 
+                // 조용한 문 여는 소리 (부드러운 클릭)
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, audioContext.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(120, audioContext.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.08, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.2);
+            }
+            else if (type === 'victory') { [523, 659, 784, 1047].forEach((freq, i) => { const o = audioContext.createOscillator(); const g = audioContext.createGain(); o.connect(g); g.connect(audioContext.destination); o.frequency.setValueAtTime(freq, audioContext.currentTime + i * 0.15); g.gain.setValueAtTime(0.15, audioContext.currentTime + i * 0.15); g.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.15 + 0.3); o.start(audioContext.currentTime + i * 0.15); o.stop(audioContext.currentTime + i * 0.15 + 0.3); }); }
+        }
+         function initEntranceBGM() {
+    // Use the <audio id="bgm"> element so the browser treats it as a user-media element
+    entranceBGM = document.getElementById('bgm');
+    if (!entranceBGM) return;
+    entranceBGM.loop = true;
+    entranceBGM.volume = 0.35;
+}
+        function toggleSound() { soundEnabled = !soundEnabled; document.getElementById('sound-toggle').textContent = soundEnabled ? '🔊' : '🔇'; document.getElementById('sound-toggle').classList.toggle('muted', !soundEnabled); }
+        
+        function updateBgmButton(){
+            const btn = document.getElementById('bgm-toggle');
+            if (!btn) return;
+            btn.textContent = settings.bgm ? '🎵' : '🚫';
+            btn.classList.toggle('muted', !settings.bgm);
+        }
+
+        function toggleBGM(){
+            settings.bgm = !settings.bgm;
+            localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+            updateBgmButton();
+            if (!entranceBGM) return;
+            if (!settings.bgm) {
+                entranceBGM.pause();
+                return;
+            }
+            // If user is on home screen and BGM is unlocked, resume.
+            if (document.getElementById('home-screen')?.classList.contains('active') && bgmUnlocked) {
+                entranceBGM.play().catch(()=>{});
+            }
+        }
+        
+        async function init() {
+    // Fallback: ensure at least one screen is visible
+    try {
+        const anyActive = document.querySelector('.screen.active');
+        if (!anyActive) document.getElementById('home-screen')?.classList.add('active');
+    } catch(e) {}
+
+    loadSettings();
+    migrateSystemReview();
+    Promise.all([loadQuestions(), loadSpecialQuestions()]).then(() => {
+        organizeQuestionsByDate();
+        organizeSpecialQuestionsByDate();
+        migrateStoredDataToCurrentQuestionBank();
+        renderSetList();
+        updateWeaknessDungeon();
+    });
+    initEntranceBGM();
+    initEventListeners();
+
+    // Restore last selected dungeon background (optional)
+    const uiState = JSON.parse(localStorage.getItem(STORAGE_KEYS.UI_STATE) || '{}');
+    if (uiState?.lastDungeonType) applyDungeonRoomBackground(uiState.lastDungeonType);
+
+    // Dungeon display names (editable)
+document.getElementById('dungeon-name-regular') && (document.getElementById('dungeon-name-regular').textContent = REGULAR_DUNGEON_NAME);
+    document.getElementById('dungeon-name-weakness') && (document.getElementById('dungeon-name-weakness').textContent = WEAKNESS_DUNGEON_NAME);
+    document.getElementById('dungeon-name-special') && (document.getElementById('dungeon-name-special').textContent = SPECIAL_DUNGEON_NAME);
+    updateBgmButton();
+
+    // BGM unlock: 모바일 브라우저는 사용자 제스처가 필요함
+    const unlockBGM = () => {
+        if (!bgmUnlocked && entranceBGM && settings.bgm) {
+            // AudioContext resume (iOS Safari 대응)
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            entranceBGM.play().then(() => { 
+                bgmUnlocked = true; 
+            }).catch((e) => {
+                console.log('BGM play failed, will retry on next interaction');
+            });
+        }
+    };
+    
+    // 다양한 이벤트에서 unlock 시도 (모바일 대응 강화)
+    ['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'].forEach(event => {
+        document.addEventListener(event, unlockBGM, { once: true, passive: true });
+    });
+    
+    // 던전 카드 클릭 시에도 unlock 시도
+    document.querySelectorAll('.dungeon-card, .nav-btn').forEach(el => {
+        el.addEventListener('click', unlockBGM, { once: true });
+    });
+}
+        
+        async function loadQuestions() {
+    // 최신(현세) + 과거(고대) 문제를 함께 로드한다.
+    // - questions_modern.json: 최신 문제 (현세)
+    // - questions_ancient.json: 과거 문제 (고대)
+    // 호환을 위해 questions.json(=현세)도 폴백으로 둔다.
+    const sources = [
+        { file: 'questions_modern.json', epoch: '현세' },
+        { file: 'questions.json', epoch: '현세' },
+        { file: 'questions_ancient.json', epoch: '고대' }
+    ];
+
+    const merged = [];
+    const seen = new Set();
+
+    for (const src of sources) {
+        try {
+            const res = await fetch(src.file, { cache: 'no-store' });
+            if (!res.ok) continue;
+            const arr = await res.json();
+            if (!Array.isArray(arr)) continue;
+
+            arr.forEach(q => {
+                // epoch 보강 (파일 기준)
+                if (!q.epoch) q.epoch = src.epoch;
+
+                // id 정규화
+                const idNum = typeof q.id === 'string' ? parseInt(q.id, 10) : q.id;
+                if (Number.isFinite(idNum)) q.id = idNum;
+
+                // 중복 방지 (id 기준)
+                const key = String(q.id);
+                if (seen.has(key)) return;
+                seen.add(key);
+                merged.push(q);
+            });
+        } catch (e) {
+            console.log('Note: Could not load ' + src.file);
+        }
+    }
+
+    allQuestions = merged;
+    if (!allQuestions.length) {
+        console.error('Failed to load questions: empty');
+    } else {
+        console.log('Loaded ' + allQuestions.length + ' questions (현세 + 고대)');
+    }
+}
+
+        async function loadSpecialQuestions() { try { const response = await fetch('special_questions.json'); specialQuestions = await response.json(); } catch (e) { console.error('Failed to load special questions:', e); specialQuestions = []; } }
+
+        
+        function organizeQuestionsByDate() {
+            const QUESTIONS_PER_SET = 25;
+            questionsByDate = {};
+            
+            // 문제에서 추가일 정보 추출 (없으면 기본값 사용)
+            const questionDates = allQuestions.map((q, idx) => ({
+                question: q,
+                addedDate: q.addedDate ? new Date(q.addedDate) : new Date('2025-01-01'),
+                epoch: q.epoch || '현세',
+                originalIndex: idx
+            }));
+            
+            // 날짜 기준으로 정렬 (최신순)
+            questionDates.sort((a, b) => b.addedDate - a.addedDate);
+            
+            // epoch 기반 분류: '현세' → 최근 추가, '고대' → 과거 기록
+            const modernQuestions = questionDates.filter(q => q.epoch === '현세').map(q => q.question);
+                        
+            // 현세 (최근 추가) 그룹
+            if (modernQuestions.length > 0) {
+                questionsByDate['epoch_recent'] = { name: '최근 추가', subtitle: '새로운 시련', isLatest: true, sets: [] };
+                for (let i = 0, setNum = 0; i < modernQuestions.length; i += QUESTIONS_PER_SET, setNum++) {
+                    const setQuestions = modernQuestions.slice(i, i + QUESTIONS_PER_SET);
+                    if (setQuestions.length === 0) break;
+                    questionsByDate['epoch_recent'].sets.push({ id: 'epoch_recent_set' + (setNum + 1), name: '제' + (setNum + 1) + '구역', questions: setQuestions });
+                }
+            }
+        }
+        
+        
+        function organizeSpecialQuestionsByDate() {
+            const QUESTIONS_PER_SET = 25;
+            specialQuestionsByDate = {};
+            const allSortedQuestions = [...specialQuestions];
+            specialQuestionsByDate['special_bank'] = { name: '결정의 탑', subtitle: '비율·변화·수식응용 32제', isLatest: true, sets: [] };
+            for (let i = 0, setNum = 0; i < allSortedQuestions.length; i += QUESTIONS_PER_SET, setNum++) {
+                const setQuestions = allSortedQuestions.slice(i, i + QUESTIONS_PER_SET);
+                if (setQuestions.length === 0) break;
+                specialQuestionsByDate['special_bank'].sets.push({ id: 'special_set' + (setNum + 1), name: '특수 제' + (setNum + 1) + '구역', questions: setQuestions });
+            }
+        }
+
+function loadSettings() {
+            const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+            if (saved) settings = { ...settings, ...JSON.parse(saved) };
+            updateBgmButton();
+            setTimeout(() => {
+                document.getElementById('setting-question-count').value = settings.questionCount;
+                document.getElementById('setting-timer-warning').value = settings.timerWarning;
+                document.getElementById('setting-boss-interval').value = settings.bossInterval;
+                document.getElementById('setting-sound').value = settings.sound ? '1' : '0';
+            }, 100);
+        }
+        
+        function saveSettings() {
+            settings.questionCount = parseInt(document.getElementById('setting-question-count').value);
+            settings.timerWarning = parseInt(document.getElementById('setting-timer-warning').value);
+            settings.bossInterval = parseInt(document.getElementById('setting-boss-interval').value);
+            settings.sound = document.getElementById('setting-sound').value === '1';
+            localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+        }
+        
+        function initEventListeners() {
+            document.querySelectorAll('.archive-tab').forEach(tab => tab.addEventListener('click', () => renderArchive(tab.dataset.tab)));
+            ['setting-question-count', 'setting-timer-warning', 'setting-boss-interval', 'setting-sound'].forEach(id => document.getElementById(id).addEventListener('change', saveSettings));
+            document.querySelectorAll('.modal-overlay').forEach(modal => modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('active'); }));
+
+            // PWA install / "앱 다운로드" 버튼 연동
+            setupInstallPrompt();
+        }
+
+        // ===== PWA Install Prompt =====
+        let deferredInstallPrompt = null;
+        function setupInstallPrompt() {
+            const installBtn = document.getElementById('install-btn');
+            if (!installBtn) return;
+
+            // Hide if already installed (standalone)
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            if (isStandalone) {
+                installBtn.style.display = 'none';
+                return;
+            }
+
+            // Show button when browser allows installation
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredInstallPrompt = e;
+                installBtn.style.display = 'inline-flex';
+            });
+
+            // Hide button once installed
+            window.addEventListener('appinstalled', () => {
+                deferredInstallPrompt = null;
+                installBtn.style.display = 'none';
+            });
+
+            // Click -> trigger install prompt (or show iOS guidance)
+            installBtn.addEventListener('click', async () => {
+                if (deferredInstallPrompt) {
+                    deferredInstallPrompt.prompt();
+                    try {
+                        await deferredInstallPrompt.userChoice;
+                    } catch (_) {}
+                    deferredInstallPrompt = null;
+                    installBtn.style.display = 'none';
+                    return;
+                }
+                // iOS Safari: no beforeinstallprompt
+                alert('iPhone/iPad에서는 Safari 공유 버튼(□↑) → "홈 화면에 추가"를 선택하세요.');
+            });
+
+            // If user is on iOS Safari, show the button proactively as guidance
+            const ua = navigator.userAgent || '';
+            const isiOS = /iPhone|iPad|iPod/i.test(ua);
+            const isSafari = isiOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
+            if (isSafari) {
+                installBtn.style.display = 'inline-flex';
+            }
+        }
+        
+        function selectDungeon(type) {
+    currentDungeonType = type; 
+    initAudio();
+    applyDungeonRoomBackground(type);
+
+    // 약점의 밀실: 정규(미궁) 약점런 / 특수(탑) 약점런 선택 화면으로 이동 (정규 던전 UI와 동일한 카드형)
+    if (type === 'weakness') { 
+        showWeaknessSelectScreen(); 
+        return; 
+    }
+
+    // regular / special: set list
+    renderSetList();
+    showScreen('set-select-screen');
+    setTimeout(() => { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }, 100);
+}
+
+function getDungeonIconSrcForEnter() {
+    // 던전 입장 오버레이 아이콘: 던전별 고정
+    if (currentDungeonType === 'special') return 'assets/icon-tower.jpg';
+    if (currentDungeonType === 'weakness' || String(currentDungeonType).startsWith('weakness_')) return 'assets/icon-weakness.jpg';
+    return 'assets/icon-maze.jpg';
+}
+
+function showWeaknessSelectScreen() {
+    applyDungeonRoomBackground('weakness');
+
+    const r = getWeakQuestionsForBank('regular').length;
+    const s = getWeakQuestionsForBank('special').length;
+
+    const cardR = document.getElementById('weakness-select-regular');
+    const cardS = document.getElementById('weakness-select-special');
+    const descR = document.getElementById('weakness-select-regular-desc');
+    const descS = document.getElementById('weakness-select-special-desc');
+
+    // 버튼 문구(카드 하단 문구) + 보유 약점 개수
+    descR.innerHTML = `미궁의 약점을 추적한다.<br><span style="font-size:0.85rem; color: var(--text-dim);">약점 ${r}개</span>`;
+    descS.innerHTML = `탑의 약점을 추적한다.<br><span style="font-size:0.85rem; color: var(--text-dim);">약점 ${s}개</span>`;
+
+    // 클릭 가능/불가 처리 (UI는 정규 던전과 동일한 카드형, locked 스타일 재사용)
+    if (r === 0) {
+        cardR.classList.add('locked');
+        cardR.onclick = () => alert('아직 미궁의 균열 목록이 없습니다!');
+    } else {
+        cardR.classList.remove('locked');
+        cardR.onclick = () => startWeaknessRun('regular');
+    }
+
+    if (s === 0) {
+        cardS.classList.add('locked');
+        cardS.onclick = () => alert('아직 탑의 균열 목록이 없습니다!');
+    } else {
+        cardS.classList.remove('locked');
+        cardS.onclick = () => startWeaknessRun('special');
+    }
+
+    showScreen('weakness-select-screen');
+}
+
+        function showDungeonEnterAnimation(dungeonName, subtitle, callback) {
+            const overlay = document.getElementById('dungeon-enter-overlay');
+            document.getElementById('enter-text').textContent = dungeonName;
+            document.getElementById('enter-subtitle').textContent = subtitle;
+
+            // 입장 연출은 효과는 통일하되, 아이콘은 던전별로 표시
+            const iconEl = document.getElementById('enter-icon');
+            const iconSrc = getDungeonIconSrcForEnter();
+            iconEl.innerHTML = `<img src="${iconSrc}" alt="던전 아이콘">`;
+
+
+            overlay.classList.add('active'); 
+            playSound('enter');
+            setTimeout(() => { overlay.classList.remove('active'); callback(); }, 2500);
+        }
+        
+        function renderSetList() {
+            const container = document.getElementById('set-list-container');
+            const bank = getActiveBank();
+            const stats = getQuestionStats(bank);
+            const byDate = (bank === 'special') ? specialQuestionsByDate : questionsByDate;
+            let html = '';
+            Object.entries(byDate).forEach(([key, dateData]) => {
+                html += '<div class="date-group"><div class="date-header"><span class="date-icon">' + (dateData.isLatest ? '<i class="ph-bold ph-sun"></i>' : '<i class="ph-bold ph-moon-stars"></i>') + '</span><div><div class="date-title">' + dateData.name + '</div><div class="date-subtitle">' + dateData.subtitle + '</div></div><span class="date-badge ' + (dateData.isLatest ? '' : 'old') + '">' + ('현세') + '</span></div><div class="set-list">';
+                dateData.sets.forEach((set, idx) => {
+                    const attempted = set.questions.filter(q => stats[q.id]).length;
+                    const progress = Math.round((attempted / set.questions.length) * 100);
+                    html += '<div class="set-card" onclick="selectSet(\'' + key + '\', ' + idx + ')"><div class="set-number">' + (idx + 1) + '</div><div class="set-info">' + set.name + '<br>' + set.questions.length + '문제</div><div class="set-progress"><div class="set-progress-fill" style="width: ' + progress + '%"></div></div></div>';
+                });
+                html += '</div></div>';
+            });
+            container.innerHTML = html;
+        }
+        
+        function selectSet(dateKey, setIndex) {
+            currentDateKey = dateKey;
+            const dateData = (currentDungeonType === 'special') ? specialQuestionsByDate[dateKey] : questionsByDate[dateKey];
+            const set = dateData.sets[setIndex];
+            let questions = [...set.questions];
+            shuffleArray(questions);
+            questions = questions.slice(0, Math.min(settings.questionCount, questions.length));
+            showDungeonEnterAnimation(dateData.name, set.name + '에 입장합니다...', () => startBattle(questions));
+        }
+        
+        function startBattle(questions) { 
+            if (entranceBGM) { entranceBGM.pause(); }
+            applyDungeonRoomBackground(currentDungeonType);
+            currentQuestions = questions; currentIndex = 0; questionTimer = 0; totalTimer = 0; battleResults = []; isPaused = false;
+            document.getElementById('battle-screen').classList.remove('boss-mode');
+            showScreen('battle-screen'); renderQuestion(); startTimer();
+        }
+        
+        function renderQuestion() {
+            if (currentIndex >= currentQuestions.length) { endBattle(); return; }
+            const q = currentQuestions[currentIndex];
+            isBossQuestion = settings.bossInterval > 0 && (currentIndex + 1) % settings.bossInterval === 0;
+            document.getElementById('battle-screen').classList.toggle('boss-mode', isBossQuestion);
+            if (isBossQuestion) playSound('boss');
+            document.getElementById('battle-progress').textContent = (currentIndex + 1) + ' / ' + currentQuestions.length;
+            document.getElementById('progress-fill').style.width = (currentIndex / currentQuestions.length) * 100 + '%';
+            const monsterImg = document.getElementById('monster-image');
+            if (isBossQuestion) {
+                monsterImg.src = BOSS_IMAGES[Math.floor(Math.random() * BOSS_IMAGES.length)];
+                monsterImg.classList.add('boss');
+                document.getElementById('monster-name').textContent = BOSS_NAMES[Math.floor(Math.random() * BOSS_NAMES.length)];
+            } else {
+                const monsterIdx = currentIndex % MONSTER_IMAGES.length;
+                monsterImg.src = MONSTER_IMAGES[monsterIdx];
+                monsterImg.classList.remove('boss');
+                document.getElementById('monster-name').textContent = MONSTER_NAMES[monsterIdx] + ' Lv.' + q.level;
+            }
+            monsterImg.classList.remove('hit', 'miss');
+            document.getElementById('monster-hp-fill').style.width = '100%';
+            document.getElementById('question-code').textContent = q.code;
+            document.getElementById('question-text').textContent = q.stem;
+            const levelEl = document.getElementById('question-level');
+            if (isBossQuestion) { levelEl.innerHTML = '<i class="ph-fill ph-crown"></i> BOSS'; levelEl.className = 'question-level level-boss'; }
+            else { levelEl.textContent = 'Lv.' + q.level; levelEl.className = 'question-level level-' + q.level; }
+            const optionsArea = document.getElementById('options-area');
+            const optionLabels = ['①', '②', '③', '④', '⑤'];
+            optionsArea.innerHTML = q.options.map((opt, idx) => '<button class="option-btn" onclick="selectAnswer(' + idx + ')"><span class="option-number">' + optionLabels[idx] + '</span><span class="option-text">' + opt + '</span></button>').join('');
+            questionTimer = 0;
+        }
+        
+        function selectAnswer(answerIdx) {
+    if (isPaused) return;
+
+    const q = currentQuestions[currentIndex];
+    const isCorrect = answerIdx === q.answerIndex;
+
+    // UI: make the choice obvious and prevent double taps
+    const optionButtons = Array.from(document.querySelectorAll('#options-area .option-btn'));
+    optionButtons.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === answerIdx) {
+            btn.classList.add('selected');
+            btn.classList.add(isCorrect ? 'correct' : 'wrong');
+        }
+    });
+
+    showAttackEffect(isCorrect);
+
+    battleResults.push({
+        questionId: q.id,
+        code: q.code,
+        userAnswer: answerIdx,
+        correctAnswer: q.answerIndex,
+        isCorrect: isCorrect,
+        time: questionTimer,
+        isBoss: isBossQuestion
+    });
+
+    updateQuestionStats(q.id, isCorrect, questionTimer, isBossQuestion, getActiveBank());
+
+    setTimeout(() => {
+        currentIndex++;
+        renderQuestion();
+    }, 700);
+}
+
+        function showAttackEffect(isCorrect) {
+            const overlay = document.getElementById('attack-overlay');
+            const text = document.getElementById('attack-text');
+            const damage = document.getElementById('damage-number');
+            const monster = document.getElementById('monster-image');
+            const hpFill = document.getElementById('monster-hp-fill');
+            overlay.className = 'attack-overlay'; text.className = 'attack-text'; damage.className = 'damage-number';
+            if (isCorrect) {
+                playSound('hit'); overlay.classList.add('hit');
+                text.textContent = isBossQuestion ? 'CRITICAL!' : 'HIT!'; text.classList.add('hit');
+                const dmg = isBossQuestion ? Math.floor(Math.random() * 100) + 200 : Math.floor(Math.random() * 50) + 100;
+                damage.textContent = '-' + dmg; damage.classList.add('hit');
+                monster.classList.add('hit'); hpFill.style.width = '0%';
+                for (let i = 0; i < 8; i++) { const p = document.createElement('div'); p.className = 'particle gold'; p.style.left = 'calc(50% + ' + ((Math.random() - 0.5) * 100) + 'px)'; p.style.top = '35%'; p.style.animation = 'pf' + (i % 4) + ' 0.6s ease-out forwards'; document.body.appendChild(p); setTimeout(() => p.remove(), 600); }
+            } else {
+                playSound('miss'); overlay.classList.add('miss');
+                text.textContent = 'MISS!'; text.classList.add('miss');
+                damage.textContent = 'DODGE'; damage.classList.add('miss');
+                monster.classList.add('miss');
+            }
+        }
+        
+        const style = document.createElement('style');
+        style.textContent = '@keyframes pf0{to{transform:translate(-50px,-80px);opacity:0}}@keyframes pf1{to{transform:translate(50px,-80px);opacity:0}}@keyframes pf2{to{transform:translate(-30px,-100px);opacity:0}}@keyframes pf3{to{transform:translate(30px,-100px);opacity:0}}';
+        document.head.appendChild(style);
+        
+        function startTimer() { if (timerInterval) clearInterval(timerInterval); timerInterval = setInterval(() => { if (!isPaused) { questionTimer++; totalTimer++; updateTimerDisplay(); } }, 1000); }
+        function updateTimerDisplay() { const el = document.getElementById('battle-timer'); el.textContent = formatTime(questionTimer); el.classList.toggle('warning', settings.timerWarning > 0 && questionTimer >= settings.timerWarning); }
+        function formatTime(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+        function togglePause() { isPaused = !isPaused; document.getElementById('pause-overlay').classList.toggle('active', isPaused); }
+        function exitBattle() { 
+            if (entranceBGM && bgmUnlocked) { entranceBGM.play(); }
+            if (timerInterval) clearInterval(timerInterval); 
+            isPaused = false; 
+            document.getElementById('pause-overlay').classList.remove('active'); 
+            document.getElementById('battle-screen').classList.remove('boss-mode'); 
+            showScreen('home-screen'); 
+        }
+        
+        function endBattle() {
+            if (timerInterval) clearInterval(timerInterval);
+            playSound('victory');
+            const correct = battleResults.filter(r => r.isCorrect).length;
+            const wrong = battleResults.length - correct;
+            const accuracy = Math.round((correct / battleResults.length) * 100);
+            const bossCount = battleResults.filter(r => r.isBoss).length;
+            const bossCorrect = battleResults.filter(r => r.isBoss && r.isCorrect).length;
+            const avgTime = Math.round(totalTimer / battleResults.length);
+            saveBattleHistory({ type: currentDungeonType, dateKey: currentDateKey, date: new Date().toISOString(), results: battleResults, totalTime: totalTimer, correct: correct, wrong: wrong, accuracy: accuracy, bossCount: bossCount, bossCorrect: bossCorrect, avgTime: avgTime }, currentDungeonType === 'special' ? 'special' : 'regular');
+            document.getElementById('result-subtitle').textContent = (currentDungeonType === 'special') ? '결정의 탑 완료' : ((currentDungeonType === 'regular') ? '기초의 미궁 완료' : '약점의 밀실 완료');
+            document.getElementById('result-correct').textContent = correct;
+            document.getElementById('result-wrong').textContent = wrong;
+            document.getElementById('result-accuracy').textContent = accuracy + '%';
+            document.getElementById('result-time').textContent = formatTime(totalTimer);
+            document.getElementById('result-avg-time').textContent = avgTime + 's';
+            document.getElementById('result-boss').textContent = bossCorrect + '/' + bossCount;
+            document.getElementById('result-detail-list').innerHTML = battleResults.map(r => '<div class="detail-item ' + (r.isCorrect ? 'correct' : 'wrong') + '"><span>' + r.code + (r.isBoss ? '<span class="boss-icon"><i class="ph-fill ph-crown"></i></span>' : '') + '</span><span>' + formatTime(r.time) + ' | ' + (r.isCorrect ? '<i class="ph-bold ph-sword"></i>' : '<i class="ph-bold ph-skull"></i>') + '</span></div>').join('');
+            document.getElementById('battle-screen').classList.remove('boss-mode');
+            updateWeaknessDungeon();
+            showScreen('result-screen');
+        }
+        
+        function _storeKeysForBank(bank) {
+            const isSpecial = bank === 'special';
+            return {
+                stats: isSpecial ? STORAGE_KEYS.QUESTION_STATS_SPECIAL : STORAGE_KEYS.QUESTION_STATS,
+                history: isSpecial ? STORAGE_KEYS.BATTLE_HISTORY_SPECIAL : STORAGE_KEYS.BATTLE_HISTORY,
+                feedbacks: isSpecial ? STORAGE_KEYS.FEEDBACKS_SPECIAL : STORAGE_KEYS.FEEDBACKS,
+                notes: isSpecial ? STORAGE_KEYS.NOTES_SPECIAL : STORAGE_KEYS.NOTES
+            };
+        }
+
+        function getQuestionStats(bank = 'regular') { 
+            const keys = _storeKeysForBank(bank);
+            const saved = localStorage.getItem(keys.stats); 
+            return saved ? JSON.parse(saved) : {}; 
+        }
+
+        function updateQuestionStats(questionId, isCorrect, time, isBoss, bank = 'regular') {
+            const keys = _storeKeysForBank(bank);
+            const stats = getQuestionStats(bank);
+            if (!stats[questionId]) stats[questionId] = { attempts: 0, correct: 0, wrong: 0, totalTime: 0, avgTime: 0, streak: 0, lastAttempt: null, bossEncounters: 0 };
+            const s = stats[questionId];
+            s.attempts++; s.totalTime += time; s.avgTime = Math.round(s.totalTime / s.attempts); s.lastAttempt = new Date().toISOString();
+            if (isBoss) s.bossEncounters++;
+            if (isCorrect) { s.correct++; s.streak = Math.max(0, s.streak) + 1; } else { s.wrong++; s.streak = Math.min(0, s.streak) - 1; }
+            localStorage.setItem(keys.stats, JSON.stringify(stats));
+        }
+        
+        function getActiveBank() {
+            if (currentDungeonType === 'special' || currentDungeonType === 'weakness_special') return 'special';
+            return 'regular';
+        }
+
+        function getWeakQuestionsForBank(bank) {
+            const stats = getQuestionStats(bank);
+            const qList = (bank === 'special') ? specialQuestions : allQuestions;
+            const byId = new Map(qList.map(q => [q.id, q]));
+            const weakIds = Object.keys(stats)
+                .filter(id => stats[id].wrong > 0)
+                .sort((a, b) => (stats[b].wrong / stats[b].attempts) - (stats[a].wrong / stats[a].attempts));
+            return weakIds.map(id => byId.get(parseInt(id))).filter(Boolean).slice(0, settings.questionCount);
+        }
+
+        function openWeaknessPath() {
+            const modal = document.getElementById('weakness-path-modal');
+            const r = getWeakQuestionsForBank('regular').length;
+            const s = getWeakQuestionsForBank('special').length;
+
+            const btnR = document.getElementById('weakness-path-regular');
+            const btnS = document.getElementById('weakness-path-special');
+
+            btnR.disabled = (r === 0);
+            btnS.disabled = (s === 0);
+
+            btnR.textContent = `기초의 미궁 · 약점 추적${r ? ' (' + r + ')' : ' (없음)'}`;
+            btnS.textContent = `결정의 탑 · 약점 추적${s ? ' (' + s + ')' : ' (없음)'}`;
+
+            modal.classList.add('active');
+        }
+
+        function closeWeaknessPath() {
+            const modal = document.getElementById('weakness-path-modal');
+            modal.classList.remove('active');
+        }
+
+        function startWeaknessRun(bank) {
+            const weakQuestions = getWeakQuestionsForBank(bank);
+            if (weakQuestions.length === 0) { alert('아직 균열 목록가 없습니다!'); return; }
+            currentDungeonType = (bank === 'special') ? 'weakness_special' : 'weakness_regular';
+            applyDungeonRoomBackground(currentDungeonType);
+            showDungeonEnterAnimation(WEAKNESS_DUNGEON_NAME, '익숙한 실패로 와라.', () => startBattle(weakQuestions));
+        }
+        
+        function updateWeaknessDungeon() {
+            const r = getWeakQuestionsForBank('regular').length;
+            const s = getWeakQuestionsForBank('special').length;
+            const total = r + s;
+            const dungeonEl = document.getElementById('weakness-dungeon');
+            const descEl = document.getElementById('weakness-desc');
+
+            if (total === 0) {
+                dungeonEl.classList.add('locked');
+                descEl.innerHTML = '익숙한 실패로 와라.<br><span style="font-size:0.8rem; color: var(--text-dim);">균열 목록 없음</span>';
+            } else {
+                dungeonEl.classList.remove('locked');
+                descEl.innerHTML = '익숙한 실패로 와라.<br><span style="font-size:0.8rem; color: var(--text-dim);">미궁 ' + r + ' · 탑 ' + s + '</span>';
+            }
+        }
+        
+        function getBattleHistory(bank = 'regular') { 
+            const keys = _storeKeysForBank(bank);
+            const saved = localStorage.getItem(keys.history); 
+            return saved ? JSON.parse(saved) : []; 
+        }
+        function saveBattleHistory(battle, bank = 'regular') { 
+            const keys = _storeKeysForBank(bank);
+            const history = getBattleHistory(bank); 
+            history.unshift(battle); 
+            if (history.length > 50) history.pop(); 
+            localStorage.setItem(keys.history, JSON.stringify(history)); 
+        }
+        
+        function openFeedback() {
+            const q = currentQuestions[currentIndex];
+            document.getElementById('feedback-code').textContent = q.code;
+            document.getElementById('feedback-text').value = getFeedback(q.id, currentDungeonType === 'special' ? 'special' : 'regular') || '';
+            document.getElementById('feedback-modal').classList.add('active');
+        }
+        function closeFeedback() { document.getElementById('feedback-modal').classList.remove('active'); }
+        function submitFeedback() {
+            const q = currentQuestions[currentIndex];
+            const text = document.getElementById('feedback-text').value.trim();
+            if (text) { saveFeedback(q.id, q.code, text, currentDungeonType === 'special' ? 'special' : 'regular'); alert('전투 보고이 저장되었습니다.'); }
+            closeFeedback();
+        }
+        function getFeedback(questionId, bank = 'regular') { const keys = _storeKeysForBank(bank); const feedbacks = JSON.parse(localStorage.getItem(keys.feedbacks) || '{}'); return feedbacks[questionId] ? feedbacks[questionId].text : ''; }
+        function saveFeedback(questionId, code, text, bank = 'regular') {
+            const keys = _storeKeysForBank(bank);
+            const feedbacks = JSON.parse(localStorage.getItem(keys.feedbacks) || '{}');
+            feedbacks[questionId] = { code: code, text: text, date: new Date().toISOString() };
+            localStorage.setItem(keys.feedbacks, JSON.stringify(feedbacks));
+        }
+        
+        function exportFeedbacksJSON() {
+            const keys = _storeKeysForBank(archiveBank);
+            const feedbacks = JSON.parse(localStorage.getItem(keys.feedbacks) || '{}');
+            const stats = getQuestionStats(archiveBank);
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                totalFeedbacks: Object.keys(feedbacks).length,
+                feedbacks: Object.entries(feedbacks).map(([id, fb]) => {
+                    const bankQuestions = (archiveBank === 'special') ? specialQuestions : allQuestions;
+                    const question = bankQuestions.find(q => q.id === parseInt(id));
+                    const qStats = stats[id] || {};
+                    return { questionId: parseInt(id), code: fb.code, feedback: fb.text, feedbackDate: fb.date, questionData: question ? { stem: question.stem, options: question.options, correctAnswer: question.answerIndex, level: question.level } : null, statistics: { attempts: qStats.attempts || 0, correct: qStats.correct || 0, wrong: qStats.wrong || 0, accuracy: qStats.attempts ? Math.round((qStats.correct / qStats.attempts) * 100) : 0, avgTime: qStats.avgTime || 0 } };
+                })
+            };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'psat_feedbacks_' + new Date().toISOString().split('T')[0] + '.json'; a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 전체 일괄 내보내기 (모든 메모 + 전투보고 + 통계)
+        function exportAllNotesAndFeedbacks() {
+            // 기초의 미궁 데이터
+            const regularKeys = _storeKeysForBank('regular');
+            const regularFeedbacks = JSON.parse(localStorage.getItem(regularKeys.feedbacks) || '{}');
+            const regularNotes = JSON.parse(localStorage.getItem(regularKeys.notes) || '{}');
+            const regularStats = getQuestionStats('regular');
+            const regularHistory = getBattleHistory('regular');
+            
+            // 결정의 탑 데이터
+            const specialKeys = _storeKeysForBank('special');
+            const specialFeedbacks = JSON.parse(localStorage.getItem(specialKeys.feedbacks) || '{}');
+            const specialNotes = JSON.parse(localStorage.getItem(specialKeys.notes) || '{}');
+            const specialStats = getQuestionStats('special');
+            const specialHistory = getBattleHistory('special');
+            
+            // 시스템 리뷰
+            const systemReview = JSON.parse(localStorage.getItem('psat_system_review') || '{}');
+            
+            // 문제 데이터와 결합
+            const combineWithQuestions = (data, questions, stats) => {
+                return Object.entries(data).map(([id, item]) => {
+                    const q = questions.find(q => q.id === parseInt(id));
+                    const s = stats[id] || {};
+                    return {
+                        id: parseInt(id),
+                        code: item.code || (q ? q.code : 'Q' + id),
+                        text: item.text,
+                        date: item.date,
+                        question: q ? { stem: q.stem, options: q.options, answer: q.answerIndex, level: q.level, solution: q.solution } : null,
+                        stats: { attempts: s.attempts || 0, correct: s.correct || 0, wrong: s.wrong || 0 }
+                    };
+                });
+            };
+            
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                exportType: '전체 일괄 내보내기',
+                
+                // 기초의 미궁
+                regularDungeon: {
+                    name: '기초의 미궁',
+                    totalQuestions: allQuestions.length,
+                    feedbacks: combineWithQuestions(regularFeedbacks, allQuestions, regularStats),
+                    notes: combineWithQuestions(regularNotes, allQuestions, regularStats),
+                    history: regularHistory,
+                    summary: {
+                        totalFeedbacks: Object.keys(regularFeedbacks).length,
+                        totalNotes: Object.keys(regularNotes).length,
+                        totalBattles: regularHistory.length,
+                        questionsAttempted: Object.keys(regularStats).length
+                    }
+                },
+                
+                // 결정의 탑
+                specialDungeon: {
+                    name: '결정의 탑',
+                    totalQuestions: specialQuestions.length,
+                    feedbacks: combineWithQuestions(specialFeedbacks, specialQuestions, specialStats),
+                    notes: combineWithQuestions(specialNotes, specialQuestions, specialStats),
+                    history: specialHistory,
+                    summary: {
+                        totalFeedbacks: Object.keys(specialFeedbacks).length,
+                        totalNotes: Object.keys(specialNotes).length,
+                        totalBattles: specialHistory.length,
+                        questionsAttempted: Object.keys(specialStats).length
+                    }
+                },
+                
+                // 시스템 리뷰
+                systemReview: systemReview,
+                
+                // 전체 요약
+                grandSummary: {
+                    totalFeedbacks: Object.keys(regularFeedbacks).length + Object.keys(specialFeedbacks).length,
+                    totalNotes: Object.keys(regularNotes).length + Object.keys(specialNotes).length,
+                    totalBattles: regularHistory.length + specialHistory.length
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'psat_all_records_' + new Date().toISOString().split('T')[0] + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            alert('전체 학습 기록이 내보내기되었습니다!\n\n포함 내용:\n- 기초의 미궁: 전투보고 ' + Object.keys(regularFeedbacks).length + '개, 메모 ' + Object.keys(regularNotes).length + '개\n- 결정의 탑: 전투보고 ' + Object.keys(specialFeedbacks).length + '개, 메모 ' + Object.keys(specialNotes).length + '개');
+        }
+
+        // 전투보고 + 사서보고 통합 내보내기 (Claude용)
+        function exportAllReportsJSON() {
+            const keys = _storeKeysForBank(archiveBank);
+            const feedbacks = JSON.parse(localStorage.getItem(keys.feedbacks) || '{}');
+            const notes = JSON.parse(localStorage.getItem(keys.notes) || '{}');
+            const systemReviewObj = JSON.parse(localStorage.getItem('psat_system_review') || '{"note":"","lastUpdated":null}');
+            const stats = getQuestionStats(archiveBank);
+            const history = getBattleHistory(archiveBank);
+            const bankQuestions = (archiveBank === 'special') ? specialQuestions : allQuestions;
+
+            // 전체 통계 계산
+            const totalAttempts = Object.values(stats).reduce((sum, s) => sum + s.attempts, 0);
+            const totalCorrect = Object.values(stats).reduce((sum, s) => sum + s.correct, 0);
+            const overallAccuracy = totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0;
+
+            // 난이도별 통계
+            const levelStats = { 1: { attempts: 0, correct: 0 }, 2: { attempts: 0, correct: 0 }, 3: { attempts: 0, correct: 0 } };
+            Object.keys(stats).forEach(id => {
+                const q = bankQuestions.find(q => q.id === parseInt(id));
+                if (q) { levelStats[q.level].attempts += stats[id].attempts; levelStats[q.level].correct += stats[id].correct; }
+            });
+
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                bank: archiveBank === 'special' ? '결정의 탑' : '기초의 미궁',
+                
+                // 사서의 보고 (앱/시스템 평가)
+                systemReview: systemReviewObj,
+
+                // 전체 통계 요약
+                overallStats: {
+                    totalQuestionsInBank: bankQuestions.length,
+                    totalBattles: history.length,
+                    totalQuestionsAttempted: Object.keys(stats).length,
+                    progressRate: Math.round((Object.keys(stats).length / bankQuestions.length) * 100),
+                    totalAttempts: totalAttempts,
+                    totalCorrect: totalCorrect,
+                    totalWrong: totalAttempts - totalCorrect,
+                    overallAccuracy: overallAccuracy,
+                    weakQuestions: Object.keys(stats).filter(id => stats[id].wrong > 0).length,
+                    masteredQuestions: Object.keys(stats).filter(id => stats[id].correct > 0 && stats[id].wrong === 0).length
+                },
+
+                // 난이도별 통계
+                levelStats: {
+                    level1: { attempts: levelStats[1].attempts, correct: levelStats[1].correct, accuracy: levelStats[1].attempts > 0 ? Math.round((levelStats[1].correct / levelStats[1].attempts) * 100) : 0 },
+                    level2: { attempts: levelStats[2].attempts, correct: levelStats[2].correct, accuracy: levelStats[2].attempts > 0 ? Math.round((levelStats[2].correct / levelStats[2].attempts) * 100) : 0 },
+                    level3: { attempts: levelStats[3].attempts, correct: levelStats[3].correct, accuracy: levelStats[3].attempts > 0 ? Math.round((levelStats[3].correct / levelStats[3].attempts) * 100) : 0 }
+                },
+
+                // 최근 던전런 기록 (최근 10개)
+                recentBattles: history.slice(0, 10).map(h => ({
+                    date: h.date,
+                    type: h.type,
+                    accuracy: h.accuracy,
+                    correct: h.correct,
+                    wrong: h.wrong,
+                    totalTime: h.totalTime
+                })),
+
+                // 학습 기록 - 전투 보고 (문제별 피드백)
+                battleReports: Object.entries(feedbacks).map(([id, fb]) => {
+                    const question = bankQuestions.find(q => q.id === parseInt(id));
+                    const qStats = stats[id] || {};
+                    return {
+                        questionId: parseInt(id),
+                        code: fb.code,
+                        feedback: fb.text,
+                        feedbackDate: fb.date,
+                        questionData: question ? {
+                            stem: question.stem,
+                            options: question.options,
+                            correctAnswer: question.answerIndex,
+                            level: question.level
+                        } : null,
+                        statistics: {
+                            attempts: qStats.attempts || 0,
+                            correct: qStats.correct || 0,
+                            wrong: qStats.wrong || 0,
+                            accuracy: qStats.attempts ? Math.round((qStats.correct / qStats.attempts) * 100) : 0,
+                            avgTime: qStats.avgTime || 0
+                        }
+                    };
+                }),
+
+                // 학습 기록 - 문제별 메모
+                questionNotes: Object.entries(notes).map(([id, n]) => ({
+                    questionId: parseInt(id),
+                    code: n.code,
+                    note: n.text,
+                    noteDate: n.date
+                })),
+
+                // 약점 문제 목록 (오답률 순)
+                weaknessQuestions: Object.keys(stats)
+                    .filter(id => stats[id].wrong > 0)
+                    .map(id => {
+                        const question = bankQuestions.find(q => q.id === parseInt(id));
+                        const qStats = stats[id];
+                        return {
+                            questionId: parseInt(id),
+                            code: question?.code || 'Q' + id,
+                            stem: question?.stem || '',
+                            level: question?.level || 0,
+                            wrongRate: Math.round((qStats.wrong / qStats.attempts) * 100),
+                            attempts: qStats.attempts,
+                            wrong: qStats.wrong
+                        };
+                    })
+                    .sort((a, b) => b.wrongRate - a.wrongRate)
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'psat_report_' + archiveBank + '_' + new Date().toISOString().split('T')[0] + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function setArchiveBank(bank){ archiveBank = bank; document.querySelectorAll('.bank-btn').forEach(b=>b.classList.toggle('active', b.dataset.bank===bank)); renderArchive(document.querySelector('.archive-tab.active')?.dataset.tab || 'summary'); }
+
+        function renderArchive(tab) {
+            const content = document.getElementById('archive-content');
+            document.querySelectorAll('.archive-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            if (tab === 'summary') renderArchiveSummary(content);
+            else if (tab === 'questions') renderArchiveQuestions(content);
+            else if (tab === 'weakness') renderArchiveWeakness(content);
+            else if (tab === 'feedback') renderArchiveFeedback(content);
+            else if (tab === 'notes') renderArchiveNotes(content);
+        }
+        
+        function renderArchiveSummary(container) {
+            const history = getBattleHistory(archiveBank);
+            const stats = getQuestionStats(archiveBank);
+            const bankQuestions = (archiveBank === 'special') ? specialQuestions : allQuestions;
+            const bankName = archiveBank === 'special' ? '결정의 탑' : '기초의 미궁';
+            
+            const totalBattles = history.length;
+            const totalQuestionsInBank = bankQuestions.length;
+            const attemptedQuestions = Object.keys(stats).length;
+            const totalAttempts = Object.values(stats).reduce((sum, s) => sum + s.attempts, 0);
+            const totalCorrect = Object.values(stats).reduce((sum, s) => sum + s.correct, 0);
+            const totalWrong = Object.values(stats).reduce((sum, s) => sum + s.wrong, 0);
+            const overallAccuracy = totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0;
+            const weakCount = Object.keys(stats).filter(id => stats[id].wrong > 0).length;
+            const progressRate = Math.round((attemptedQuestions / totalQuestionsInBank) * 100);
+            
+            // 난이도별 통계
+            const levelStats = { 1: { attempts: 0, correct: 0 }, 2: { attempts: 0, correct: 0 }, 3: { attempts: 0, correct: 0 } };
+            Object.keys(stats).forEach(id => {
+                const q = bankQuestions.find(q => q.id === parseInt(id));
+                if (q) { levelStats[q.level].attempts += stats[id].attempts; levelStats[q.level].correct += stats[id].correct; }
+            });
+            
+            let html = `
+                <div style="text-align:center;margin-bottom:15px;">
+                    <h3 style="font-family:'Cinzel',serif;color:var(--accent-gold);margin-bottom:5px;">${bankName}</h3>
+                    <p style="color:var(--text-dim);font-size:0.8rem;">학습 현황 및 통계</p>
+                </div>
+                
+                <!-- 진행도 바 -->
+                <div style="margin-bottom:20px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                        <span style="color:var(--text-ancient);font-size:0.85rem;">📈 진행도</span>
+                        <span style="color:var(--accent-gold);font-weight:700;">${attemptedQuestions}/${totalQuestionsInBank} (${progressRate}%)</span>
+                    </div>
+                    <div style="height:10px;background:rgba(0,0,0,0.4);border-radius:5px;overflow:hidden;">
+                        <div style="height:100%;width:${progressRate}%;background:linear-gradient(90deg,var(--accent-gold-dim),var(--accent-gold));transition:width 0.5s;"></div>
+                    </div>
+                </div>
+                
+                <!-- 핵심 통계 -->
+                <div class="archive-summary">
+                    <div class="stat-card"><div class="stat-value">${totalBattles}</div><div class="stat-label"><i class="ph-bold ph-castle-turret"></i> 던전런</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:${overallAccuracy >= 80 ? '#27ae60' : overallAccuracy >= 60 ? '#f39c12' : '#e74c3c'}">${overallAccuracy}%</div><div class="stat-label"><i class="ph-bold ph-chart-line-up"></i> 정답률</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:#27ae60">${totalCorrect}</div><div class="stat-label"><i class="ph-bold ph-sword"></i> 정답</div></div>
+                    <div class="stat-card"><div class="stat-value" style="color:#e74c3c">${totalWrong}</div><div class="stat-label"><i class="ph-bold ph-skull"></i> 오답</div></div>
+                </div>
+                
+                <!-- 난이도별 정답률 -->
+                <h3 class="detail-title" style="margin-top:20px;"><i class="ph-bold ph-chart-line-up"></i> 난이도별 정답률</h3>
+                <div class="stats-breakdown">`;
+            
+            [1,2,3].forEach(lv => {
+                const acc = levelStats[lv].attempts > 0 ? Math.round((levelStats[lv].correct / levelStats[lv].attempts) * 100) : 0;
+                const color = lv === 1 ? '#27ae60' : lv === 2 ? '#3498db' : '#e74c3c';
+                const lvName = lv === 1 ? '기초' : lv === 2 ? '응용' : '심화';
+                html += `<div class="breakdown-card">
+                    <div class="breakdown-value" style="color:${color}">${acc}%</div>
+                    <div class="breakdown-label">Lv.${lv} ${lvName} (${levelStats[lv].attempts}회)</div>
+                </div>`;
+            });
+            
+            html += `<div class="breakdown-card">
+                    <div class="breakdown-value" style="color:var(--danger)">${weakCount}</div>
+                    <div class="breakdown-label">균열 문제</div>
+                </div></div>
+                
+                <!-- 최근 기록 -->
+                <h3 class="detail-title" style="margin-top:20px;"><i class="ph-bold ph-scroll"></i> 최근 던전 기록</h3>
+                <div style="max-height:180px;overflow-y:auto;margin-bottom:15px;">`;
+            
+            if (history.length > 0) {
+                html += history.slice(0, 8).map(h => {
+                    const typeIcon = h.type === 'regular' ? '<i class="ph-bold ph-castle-turret"></i>' : h.type === 'special' ? '<i class="ph-bold ph-lightning"></i>' : '<i class="ph-bold ph-skull"></i>';
+                    const accColor = h.accuracy >= 80 ? '#27ae60' : h.accuracy >= 60 ? '#f39c12' : '#e74c3c';
+                    return `<div class="detail-item"><span>${typeIcon} <span style="color:${accColor};font-weight:700;">${h.accuracy}%</span> (${h.correct}/${h.correct + h.wrong})</span><span style="color:var(--text-dim);">${new Date(h.date).toLocaleDateString()}</span></div>`;
+                }).join('');
+            } else {
+                html += '<p style="color:var(--text-dim);padding:20px;text-align:center;">기록 없음</p>';
+            }
+            
+            html += `</div>
+                <!-- JSON 내보내기 -->
+                <div style="margin-top:15px;padding-top:15px;border-top:1px solid var(--border-ornate);">
+                    <button class="feedback-submit" onclick="exportAllReportsJSON()" style="width:100%;">📤 Claude용 JSON 내보내기</button>
+                </div>`;
+            
+            container.innerHTML = html;
+        }
+        
+        function renderArchiveQuestions(container) {
+            const byDate = (archiveBank === 'special') ? specialQuestionsByDate : questionsByDate;
+            const stats = getQuestionStats(archiveBank);
+            const bankQuestions = (archiveBank === 'special') ? specialQuestions : allQuestions;
+            
+            // 전체 문제 통계
+            const totalQ = bankQuestions.length;
+            const attemptedQ = Object.keys(stats).length;
+            const masteredQ = Object.keys(stats).filter(id => stats[id].correct > 0 && stats[id].wrong === 0).length;
+            const weakQ = Object.keys(stats).filter(id => stats[id].wrong > 0).length;
+            const notAttemptedQ = totalQ - attemptedQ;
+            
+            let html = `
+                <!-- 도감 요약 -->
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:15px;">
+                    <div style="background:rgba(0,0,0,0.3);padding:10px 5px;border-radius:8px;text-align:center;">
+                        <div style="font-size:1.1rem;color:var(--accent-gold);font-weight:700;">${totalQ}</div>
+                        <div style="font-size:0.65rem;color:var(--text-dim);">전체</div>
+                    </div>
+                    <div style="background:rgba(39,174,96,0.15);padding:10px 5px;border-radius:8px;text-align:center;border:1px solid rgba(39,174,96,0.3);">
+                        <div style="font-size:1.1rem;color:#27ae60;font-weight:700;">${masteredQ}</div>
+                        <div style="font-size:0.65rem;color:var(--text-dim);">완벽</div>
+                    </div>
+                    <div style="background:rgba(231,76,60,0.15);padding:10px 5px;border-radius:8px;text-align:center;border:1px solid rgba(231,76,60,0.3);">
+                        <div style="font-size:1.1rem;color:#e74c3c;font-weight:700;">${weakQ}</div>
+                        <div style="font-size:0.65rem;color:var(--text-dim);">균열</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05);padding:10px 5px;border-radius:8px;text-align:center;">
+                        <div style="font-size:1.1rem;color:var(--text-dim);font-weight:700;">${notAttemptedQ}</div>
+                        <div style="font-size:0.65rem;color:var(--text-dim);">미도전</div>
+                    </div>
+                </div>
+                
+                <!-- 구역 선택 -->
+                <div style="margin-bottom:12px;">
+                    <select id="archive-date-select" onchange="renderDateSets(this.value)" class="setting-select" style="width:100%;padding:10px;">
+                        <option value="">📂 구역을 선택하세요</option>`;
+            
+            Object.entries(byDate).forEach(([key, data]) => {
+                const setCount = data.sets.length;
+                html += `<option value="${key}">${data.name} (${setCount}개 세트)</option>`;
+            });
+            
+            html += `</select>
+                </div>
+                <div id="archive-sets-container"></div>
+                <div id="archive-question-container" class="archive-question-list"></div>`;
+            
+            container.innerHTML = html;
+        }
+        
+        function renderDateSets(dateKey) {
+            if (!dateKey) {
+                document.getElementById('archive-sets-container').innerHTML = '';
+                document.getElementById('archive-question-container').innerHTML = '';
+                return;
+            }
+            const byDate = (archiveBank === 'special') ? specialQuestionsByDate : questionsByDate;
+            const dateData = byDate[dateKey];
+            const stats = getQuestionStats(archiveBank);
+            
+            let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-bottom:15px;">';
+            dateData.sets.forEach((set, idx) => {
+                // 세트별 완료율 계산
+                const setAttempted = set.questions.filter(q => stats[q.id]).length;
+                const setTotal = set.questions.length;
+                const setProgress = Math.round((setAttempted / setTotal) * 100);
+                const progressColor = setProgress === 100 ? '#27ae60' : setProgress > 50 ? '#f39c12' : 'var(--text-dim)';
+                
+                html += `<button onclick="renderSetQuestionsArchive('${dateKey}',${idx})" class="archive-tab" style="padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                    <span style="font-size:1rem;font-weight:700;">${idx + 1}</span>
+                    <span style="font-size:0.65rem;color:${progressColor}">${setAttempted}/${setTotal}</span>
+                </button>`;
+            });
+            html += '</div>';
+            
+            document.getElementById('archive-sets-container').innerHTML = html;
+            document.getElementById('archive-question-container').innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:20px;font-size:0.85rem;">세트를 선택하면 문제 목록이 표시됩니다.</p>';
+        }
+        
+        function renderSetQuestionsArchive(dateKey, setIndex) {
+            const byDate = (archiveBank === 'special') ? specialQuestionsByDate : questionsByDate;
+            const set = byDate[dateKey].sets[setIndex];
+            const stats = getQuestionStats(archiveBank);
+            
+            let html = `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border-ornate);">
+                <span style="color:var(--accent-gold);font-family:'Cinzel',serif;font-weight:700;">${set.name}</span>
+                <span style="color:var(--text-dim);font-size:0.8rem;margin-left:8px;">${set.questions.length}문제</span>
+            </div>`;
+            
+            html += set.questions.map(q => {
+                const qStats = stats[q.id];
+                let statusIcon, statusColor, statusText;
+                
+                if (!qStats) {
+                    statusIcon = '○'; statusColor = 'var(--text-dim)'; statusText = '미도전';
+                } else if (qStats.wrong === 0 && qStats.correct > 0) {
+                    statusIcon = '◆'; statusColor = '#27ae60'; statusText = `완벽 (${qStats.correct}회)`;
+                } else if (qStats.wrong > 0) {
+                    const wrongRate = Math.round((qStats.wrong / qStats.attempts) * 100);
+                    statusIcon = '◇'; statusColor = '#e74c3c'; statusText = `오답 ${wrongRate}%`;
+                } else {
+                    statusIcon = '◈'; statusColor = '#f39c12'; statusText = `${qStats.attempts}회`;
+                }
+                
+                const lvColor = q.level === 1 ? '#27ae60' : q.level === 2 ? '#3498db' : '#e74c3c';
+                
+                return `<div class="archive-question" onclick="showQuestionDetail(${q.id})" style="display:flex;align-items:center;gap:10px;">
+                    <span style="color:${statusColor};font-size:1.1rem;width:20px;text-align:center;">${statusIcon}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                            <span class="archive-question-code">${q.code}</span>
+                            <span style="font-size:0.65rem;color:${lvColor};border:1px solid ${lvColor};padding:1px 5px;border-radius:3px;">Lv.${q.level}</span>
+                        </div>
+                        <div class="archive-question-text" style="font-size:0.8rem;">${q.stem}</div>
+                    </div>
+                    <span style="color:${statusColor};font-size:0.7rem;white-space:nowrap;">${statusText}</span>
+                </div>`;
+            }).join('');
+            
+            document.getElementById('archive-question-container').innerHTML = html;
+        }
+        
+        function renderArchiveWeakness(container) {
+            const stats = getQuestionStats(archiveBank);
+            const bankQuestions = (archiveBank === 'special') ? specialQuestions : allQuestions;
+            const weakQuestions = Object.keys(stats)
+                .filter(id => stats[id].wrong > 0)
+                .map(id => ({ question: bankQuestions.find(q => q.id === parseInt(id)), stats: stats[id] }))
+                .filter(x => x.question)
+                .sort((a, b) => (b.stats.wrong / b.stats.attempts) - (a.stats.wrong / a.stats.attempts))
+                .slice(0, 20);
+
+            if (weakQuestions.length === 0) { container.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:40px;">균열 목록가 없습니다!</p>'; return; }
+
+            container.innerHTML = '<p style="color:var(--text-ancient);margin-bottom:12px;font-size:0.85rem;">오답률이 높은 문제들입니다.</p><div class="archive-question-list">' +
+                weakQuestions.map(x => {
+                    const q = x.question; const qStats = x.stats;
+                    const wrongRate = Math.round((qStats.wrong / qStats.attempts) * 100);
+                    return '<div class="archive-question" onclick="showQuestionDetail(' + q.id + ')"><div class="archive-question-header"><span class="archive-question-code">' + q.code + '</span><span class="archive-question-stats" style="color:var(--danger)">오답 ' + wrongRate + '% (' + qStats.wrong + '/' + qStats.attempts + ')</span></div><div class="archive-question-text">' + q.stem + '</div></div>';
+                }).join('') + '</div>';
+        }
+        
+        // ===== NOTES (사서의 보고) =====
+function getNote(questionId, bank = 'regular') {
+    const keys = _storeKeysForBank(bank);
+    const notes = JSON.parse(localStorage.getItem(keys.notes) || '{}');
+    return notes[questionId] ? notes[questionId].text : '';
+}
+function saveNote(questionId, code, text, bank = 'regular') {
+    const keys = _storeKeysForBank(bank);
+    const notes = JSON.parse(localStorage.getItem(keys.notes) || '{}');
+    notes[questionId] = { code: code, text: text, date: new Date().toISOString() };
+    localStorage.setItem(keys.notes, JSON.stringify(notes));
+}
+function exportNotesJSON() {
+    const keys = _storeKeysForBank(archiveBank);
+    const notes = JSON.parse(localStorage.getItem(keys.notes) || '{}');
+    const exportData = {
+        exportDate: new Date().toISOString(),
+        totalNotes: Object.keys(notes).length,
+        notes: Object.entries(notes).map(([id, n]) => ({ questionId: parseInt(id), code: n.code, note: n.text, noteDate: n.date }))
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'psat_notes_' + new Date().toISOString().split('T')[0] + '.json'; a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ===== QUESTION DETAIL (Archive) =====
+function showQuestionDetail(questionId, bankOverride) {
+    const bank = bankOverride || archiveBank || 'regular';
+    const bankQuestions = (bank === 'special') ? specialQuestions : allQuestions;
+    const q = bankQuestions.find(x => x.id === parseInt(questionId));
+    if (!q) {
+        document.getElementById('question-detail-content').innerHTML = '<p style="color:var(--text-dim);padding:16px;">문제를 찾을 수 없습니다.</p>';
+        document.getElementById('question-detail-modal').classList.add('active');
+        return;
+    }
+
+    const stats = getQuestionStats(bank)[q.id] || { attempts: 0, correct: 0, wrong: 0, avgTime: 0 };
+    const feedback = getFeedback(q.id, bank) || '';
+    const note = getNote(q.id, bank) || '';
+    const optionLabels = ['①', '②', '③', '④', '⑤'];
+
+    const esc = (s) => (s || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+
+    // 기본 풀이 섹션 생성
+    const solutionSection = q.solution ? `
+        <div class="notes-section" style="margin-bottom:15px;">
+            <div class="notes-title"><i class="ph-bold ph-books"></i> 기본 풀이</div>
+            <div style="background:rgba(20,18,28,0.5);border:1px solid var(--border-ornate);border-radius:8px;padding:12px;color:var(--text-light);font-size:0.85rem;line-height:1.6;white-space:pre-wrap;">${esc(q.solution)}</div>
+        </div>
+    ` : '';
+
+    const html = `
+        <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                <div style="font-family:'Cinzel',serif;color:var(--accent-gold);font-weight:800;">${esc(q.code)}</div>
+                <div style="color:var(--text-dim);font-size:0.8rem;">시도 ${stats.attempts} · 정답 ${stats.correct} · 오답 ${stats.wrong}</div>
+            </div>
+        </div>
+        <div style="color:var(--text-light);line-height:1.55;margin-bottom:12px;white-space:pre-wrap;">${esc(q.stem)}</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+            ${q.options.map((opt, idx) => {
+                const isAns = idx === q.answerIndex;
+                return `<div style="border:1px solid ${isAns ? 'rgba(212,175,55,0.7)' : 'var(--border-ornate)'};background:${isAns ? 'rgba(212,175,55,0.10)' : 'rgba(18, 15, 25, 0.2)'};border-radius:10px;padding:12px 12px;display:flex;gap:10px;">
+                    <div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid ${isAns ? 'rgba(212,175,55,0.8)' : 'var(--border-ornate)'};color:${isAns ? 'var(--accent-gold)' : 'var(--text-dim)'};font-family:'Cinzel',serif;font-weight:800;">${optionLabels[idx]}</div>
+                    <div style="flex:1;color:var(--text-light);line-height:1.45;white-space:pre-wrap;">${esc(opt)}</div>
+                </div>`;
+            }).join('')}
+        </div>
+
+        ${solutionSection}
+
+        <div class="notes-section">
+            <div class="notes-title"><i class="ph-bold ph-notebook"></i> 전투 보고</div>
+            <textarea class="feedback-textarea" id="detail-feedback-text" placeholder="전투 보고를 남겨주세요.">${esc(feedback)}</textarea>
+            <div style="display:flex;gap:10px;margin-top:10px;">
+                <button class="feedback-submit" onclick="saveDetailFeedback(${q.id}, '${bank}')">저장</button>
+            </div>
+        </div>
+
+        <div class="notes-section">
+            <div class="notes-title"><i class="ph-bold ph-book-open"></i> 문제별 메모</div>
+            <textarea class="notes-textarea" id="detail-note-text" placeholder="해설, 핵심 정리, 오답노트 등을 남겨주세요.">${esc(note)}</textarea>
+            <div style="display:flex;gap:10px;margin-top:10px;">
+                <button class="feedback-submit" onclick="saveDetailNote(${q.id}, '${bank}')">저장</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('question-detail-content').innerHTML = html;
+    document.getElementById('question-detail-modal').classList.add('active');
+}
+
+function saveDetailFeedback(questionId, bank) {
+    const bankQuestions = (bank === 'special') ? specialQuestions : allQuestions;
+    const q = bankQuestions.find(x => x.id === parseInt(questionId));
+    if (!q) return;
+    const text = (document.getElementById('detail-feedback-text')?.value || '').trim();
+    if (!text) { alert('전투 보고 내용을 입력하세요.'); return; }
+    saveFeedback(q.id, q.code, text, bank);
+    alert('전투 보고가 저장되었습니다.');
+    if (document.getElementById('archive-screen')?.classList.contains('active')) renderArchive('feedback');
+}
+
+function saveDetailNote(questionId, bank) {
+    const bankQuestions = (bank === 'special') ? specialQuestions : allQuestions;
+    const q = bankQuestions.find(x => x.id === parseInt(questionId));
+    if (!q) return;
+    const text = (document.getElementById('detail-note-text')?.value || '').trim();
+    if (!text) { alert('메모 내용을 입력하세요.'); return; }
+    saveNote(q.id, q.code, text, bank);
+    alert('문제별 메모가 저장되었습니다.');
+    if (document.getElementById('archive-screen')?.classList.contains('active')) renderArchive('notes');
+}
+
+// ===== ARCHIVE: 전투 보고 (학습 기록) / 사서의 보고 (앱 평가) =====
+
+// 전투보고 = 학습 관련 기록 (문제별 해설, 오답노트, 핵심정리)
+function renderArchiveFeedback(container) {
+    const keys = _storeKeysForBank(archiveBank);
+    const feedbacks = JSON.parse(localStorage.getItem(keys.feedbacks) || '{}');
+    const notes = JSON.parse(localStorage.getItem(keys.notes) || '{}');
+    const stats = getQuestionStats(archiveBank);
+    const bankQuestions = (archiveBank === 'special') ? specialQuestions : allQuestions;
+    
+    // 전투보고 + 문제메모 통합 (학습 기록)
+    const allRecords = [];
+    
+    Object.entries(feedbacks).forEach(([id, fb]) => {
+        allRecords.push({ id: parseInt(id), type: 'feedback', code: fb.code, text: fb.text, date: fb.date });
+    });
+    Object.entries(notes).forEach(([id, n]) => {
+        allRecords.push({ id: parseInt(id), type: 'note', code: n.code, text: n.text, date: n.date });
+    });
+    
+    // 최신순 정렬
+    allRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    const totalFeedbacks = Object.keys(feedbacks).length;
+    const totalNotes = Object.keys(notes).length;
+
+    let html = `
+        <div style="margin-bottom:15px;">
+            <h3 style="font-family:'Cinzel',serif;color:var(--accent-gold);margin-bottom:8px;"><i class="ph-bold ph-notebook"></i> 학습 기록</h3>
+            <p style="color:var(--text-dim);font-size:0.8rem;margin-bottom:10px;">문제별 해설, 오답노트, 핵심정리 등 학습 관련 기록입니다.</p>
+            <div style="display:flex;gap:15px;margin-bottom:12px;">
+                <span style="color:var(--text-ancient);font-size:0.85rem;">전투보고 ${totalFeedbacks}개</span>
+                <span style="color:var(--text-ancient);font-size:0.85rem;">문제메모 ${totalNotes}개</span>
+            </div>
+        </div>`;
+    
+    if (allRecords.length === 0) {
+        html += '<p style="color:var(--text-dim);text-align:center;padding:30px;">학습 기록이 없습니다.<br><span style="font-size:0.8rem;">문제 풀이 후 전투보고나 메모를 남겨보세요.</span></p>';
+    } else {
+        html += '<div class="archive-question-list" style="max-height:400px;">';
+        html += allRecords.slice(0, 30).map(record => {
+            const question = bankQuestions.find(q => q.id === record.id);
+            const qStats = stats[record.id] || {};
+            const date = record.date ? new Date(record.date).toLocaleDateString() : '';
+            const snippet = (record.text || '').slice(0, 80).replace(/\n/g, ' ');
+            const typeIcon = record.type === 'feedback' ? '<i class="ph-bold ph-sword"></i>' : '<i class="ph-bold ph-book-open"></i>';
+            const typeLabel = record.type === 'feedback' ? '전투보고' : '메모';
+            const wrongRate = qStats.attempts ? Math.round((qStats.wrong / qStats.attempts) * 100) : 0;
+            
+            return `<div class="archive-question" onclick="showQuestionDetail(${record.id}, '${archiveBank}')" style="border-left:3px solid ${record.type === 'feedback' ? 'var(--accent-gold)' : '#3498db'};">
+                <div class="archive-question-header">
+                    <span class="archive-question-code">${typeIcon} ${record.code || 'Q' + record.id}</span>
+                    <span style="color:var(--text-dim);font-size:0.7rem;">${typeLabel} · ${date}</span>
+                </div>
+                <div class="archive-question-text">${snippet}${record.text && record.text.length > 80 ? '…' : ''}</div>
+                ${qStats.attempts ? `<div style="margin-top:5px;font-size:0.7rem;color:${wrongRate > 30 ? '#e74c3c' : '#27ae60'};">정답률 ${100 - wrongRate}% (${qStats.attempts}회)</div>` : ''}
+            </div>`;
+        }).join('');
+        html += '</div>';
+    }
+    
+    html += `<div style="margin-top:15px;padding-top:15px;border-top:1px solid var(--border-ornate);">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="feedback-submit" onclick="exportFeedbacksJSON()" style="flex:1;min-width:140px;"><i class="ph-bold ph-export"></i> 현재 탭 내보내기</button>
+            <button class="feedback-submit" onclick="exportAllNotesAndFeedbacks()" style="flex:1;min-width:140px;background:linear-gradient(135deg,#3498db,#2980b9);"><i class="ph-bold ph-files"></i> 전체 일괄 내보내기</button>
+        </div>
+        <p style="color:var(--text-dim);font-size:0.7rem;margin-top:8px;text-align:center;">전체 일괄 내보내기: 모든 문제의 메모, 전투보고, 통계를 한 번에 내보냅니다.</p>
+    </div>`;
+
+    container.innerHTML = html;
+}
+
+// 사서보고 = 앱/던전 시스템 전반 평가
+function renderArchiveNotes(container) {
+    // 사서의 보고는 '사서의 보고' 화면으로 이동됨
+    container.innerHTML = `
+        <div style="margin-bottom:15px;">
+            <h3 style="font-family:'Cinzel',serif;color:var(--accent-gold);margin-bottom:8px;"><i class="ph-bold ph-scroll"></i> 사서의 보고</h3>
+            <p style="color:var(--text-dim);font-size:0.85rem;line-height:1.5;">
+                사서의 보고는 탑(기초의 미궁/결정의 탑)과 분리된 <b>시스템 전반</b> 보고로 변경되었습니다.<br>
+                홈 화면의 <b><i class="ph-bold ph-scroll"></i> 사서의 보고</b>에서 작성/저장/내보내기가 가능합니다.
+            </p>
+            <button class="feedback-submit" onclick="showScreen('system-report-screen')" style="width:100%;margin-top:12px;"><i class="ph-bold ph-scroll"></i> 사서의 보고로 이동</button>
+        </div>
+    `;
+}
+
+
+// ===== SYSTEM REVIEW (사서의 보고: 앱/시스템 전반) =====
+const SYSTEM_REVIEW_KEY = 'psat_system_review';
+
+function _getSystemReviewObj() {
+    try {
+        const obj = JSON.parse(localStorage.getItem(SYSTEM_REVIEW_KEY) || '{}');
+        return {
+            note: (obj && typeof obj.note === 'string') ? obj.note : '',
+            lastUpdated: (obj && typeof obj.lastUpdated === 'string') ? obj.lastUpdated : null
+        };
+    } catch (_) {
+        return { note: '', lastUpdated: null };
+    }
+}
+
+// 기존(탑별) 사서보고가 남아있으면 1회 마이그레이션하여 사서의 보고로 통합
+function migrateSystemReview() {
+    const current = _getSystemReviewObj();
+    if (current.note && current.note.trim().length) return;
+
+    const legacyRegular = (localStorage.getItem('psat_app_review_regular') || '').trim();
+    const legacySpecial = (localStorage.getItem('psat_app_review_special') || '').trim();
+    if (!legacyRegular && !legacySpecial) return;
+
+    let note = '';
+    if (legacyRegular) note += `[기초의 미궁]
+${legacyRegular}
+
+`;
+    if (legacySpecial) note += `[결정의 탑]
+${legacySpecial}
+
+`;
+    note += '※ 위 내용은 기존(탑별) 사서보고에서 사서의 보고로 통합되었습니다.';
+
+    localStorage.setItem(SYSTEM_REVIEW_KEY, JSON.stringify({ note, lastUpdated: new Date().toISOString() }));
+}
+
+function renderSystemReviewScreen() {
+    const obj = _getSystemReviewObj();
+    const ta = document.getElementById('system-review-text');
+    if (ta) ta.value = obj.note || '';
+}
+
+function saveSystemReview() {
+    const text = (document.getElementById('system-review-text')?.value || '').trim();
+    localStorage.setItem(SYSTEM_REVIEW_KEY, JSON.stringify({ note: text, lastUpdated: new Date().toISOString() }));
+    alert('사서의 보고가 저장되었습니다.');
+}
+
+function exportSystemReviewJSON() {
+    const obj = _getSystemReviewObj();
+    const exportData = {
+        exportDate: new Date().toISOString(),
+        systemReview: obj
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'psat_librarian_report_' + new Date().toISOString().split('T')[0] + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// 전체 통합 내보내기 (사서의 보고 + 모든 전투보고 + 메모 + 통계)
+function exportAllWithLibrarianReport() {
+    // 사서의 보고
+    const librarianReport = _getSystemReviewObj();
+    
+    // 기초의 미궁 데이터
+    const regularKeys = _storeKeysForBank('regular');
+    const regularFeedbacks = JSON.parse(localStorage.getItem(regularKeys.feedbacks) || '{}');
+    const regularNotes = JSON.parse(localStorage.getItem(regularKeys.notes) || '{}');
+    const regularStats = getQuestionStats('regular');
+    const regularHistory = getBattleHistory('regular');
+    
+    // 결정의 탑 데이터
+    const specialKeys = _storeKeysForBank('special');
+    const specialFeedbacks = JSON.parse(localStorage.getItem(specialKeys.feedbacks) || '{}');
+    const specialNotes = JSON.parse(localStorage.getItem(specialKeys.notes) || '{}');
+    const specialStats = getQuestionStats('special');
+    const specialHistory = getBattleHistory('special');
+    
+    // 문제 데이터와 결합 함수
+    const combineWithQuestions = (data, questions, stats) => {
+        return Object.entries(data).map(([id, item]) => {
+            const q = questions.find(q => q.id === parseInt(id));
+            const s = stats[id] || {};
+            return {
+                id: parseInt(id),
+                code: item.code || (q ? q.code : 'Q' + id),
+                text: item.text,
+                date: item.date,
+                question: q ? { stem: q.stem, options: q.options, answer: q.answerIndex, level: q.level, solution: q.solution } : null,
+                stats: { attempts: s.attempts || 0, correct: s.correct || 0, wrong: s.wrong || 0 }
+            };
+        });
+    };
+    
+    // 통계 계산
+    const calcStats = (stats, questions) => {
+        const totalAttempts = Object.values(stats).reduce((sum, s) => sum + (s.attempts || 0), 0);
+        const totalCorrect = Object.values(stats).reduce((sum, s) => sum + (s.correct || 0), 0);
+        return {
+            totalQuestions: questions.length,
+            questionsAttempted: Object.keys(stats).length,
+            totalAttempts,
+            totalCorrect,
+            totalWrong: totalAttempts - totalCorrect,
+            accuracy: totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0
+        };
+    };
+    
+    const exportData = {
+        exportDate: new Date().toISOString(),
+        exportType: '전체 통합 내보내기 (사서의 보고 포함)',
+        
+        // 사서의 보고 (최상단 배치)
+        librarianReport: {
+            title: '사서의 보고',
+            note: librarianReport.note,
+            lastUpdated: librarianReport.lastUpdated
+        },
+        
+        // 기초의 미궁
+        regularDungeon: {
+            name: '기초의 미궁',
+            summary: calcStats(regularStats, allQuestions),
+            feedbacks: combineWithQuestions(regularFeedbacks, allQuestions, regularStats),
+            notes: combineWithQuestions(regularNotes, allQuestions, regularStats),
+            battleHistory: regularHistory.slice(0, 20)
+        },
+        
+        // 결정의 탑
+        specialDungeon: {
+            name: '결정의 탑',
+            summary: calcStats(specialStats, specialQuestions),
+            feedbacks: combineWithQuestions(specialFeedbacks, specialQuestions, specialStats),
+            notes: combineWithQuestions(specialNotes, specialQuestions, specialStats),
+            battleHistory: specialHistory.slice(0, 20)
+        },
+        
+        // 전체 요약
+        grandSummary: {
+            totalFeedbacks: Object.keys(regularFeedbacks).length + Object.keys(specialFeedbacks).length,
+            totalNotes: Object.keys(regularNotes).length + Object.keys(specialNotes).length,
+            totalBattles: regularHistory.length + specialHistory.length,
+            hasLibrarianReport: !!librarianReport.note
+        }
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'psat_complete_export_' + new Date().toISOString().split('T')[0] + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    const summary = `전체 기록이 내보내기되었습니다!
+
+📜 사서의 보고: ${librarianReport.note ? '포함' : '없음'}
+🏰 기초의 미궁: 전투보고 ${Object.keys(regularFeedbacks).length}개, 메모 ${Object.keys(regularNotes).length}개
+⚡ 결정의 탑: 전투보고 ${Object.keys(specialFeedbacks).length}개, 메모 ${Object.keys(specialNotes).length}개`;
+    
+    alert(summary);
+}
+
+// (호환) 과거 함수명이 호출되더라도 사서의 보고 저장으로 연결
+function saveAppReview() { saveSystemReview(); }
+
+        function closeQuestionDetail() { document.getElementById('question-detail-modal').classList.remove('active'); }
+        function shuffleArray(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
+        function resetAllData() { if (confirm('모든 데이터가 삭제됩니다. 계속하시겠습니까?')) { Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key)); alert('데이터가 초기화되었습니다.'); location.reload(); } }
+        
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(err => console.log('SW failed:', err)); }); }
+
+        // 초기화 실행
+        init();
+
+        // URL 해시로 특정 화면을 직접 열기 (예: index.html#archive-screen)
+        window.addEventListener("load", () => {
+            const initial = location.hash ? location.hash.slice(1) : "";
+            if (initial && document.getElementById(initial)) {
+                showScreen(initial, { skipHistory: true });
+            }
+        });
+    </script>
+
+    <script src="psat_update.js"></script>
+</body>
+</html>
