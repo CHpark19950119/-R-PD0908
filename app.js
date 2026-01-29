@@ -238,6 +238,13 @@ function showScreen(screenId) {
     // 새 화면으로 전환 시 스크롤 위치 초기화
     targetScreen.scrollTop = 0;
 
+
+    // 페이지 자체 스크롤은 잠그고(다른 화면으로 밀려가지 않게), 현재 화면 컨테이너만 스크롤 허용
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
     // Entrance BGM only on the home screen. Stop it immediately when entering a dungeon.
     if (screenId === 'home-screen') {
         playEntranceBGM();
