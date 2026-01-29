@@ -530,23 +530,15 @@
         */
 
     
-/* ===== MODAL FIX : 사서의 보고 클릭 불가 문제 해결 ===== */
+/* ===== MODAL LAYER FIX (safe) ===== */
 .modal-overlay {
     position: fixed;
     inset: 0;
     z-index: 9999;
-    pointer-events: auto;
 }
 .modal {
     position: relative;
     z-index: 10000;
-}
-/* 모달 활성 시 배경 차단 */
-body.modal-open .screen {
-    pointer-events: none;
-}
-body.modal-open .modal-overlay {
-    pointer-events: auto;
 }
 
 </style>

@@ -149,7 +149,6 @@ function initEventListeners() {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.classList.remove('active');
-    document.body.classList.remove('modal-open');
             }
         });
     });
