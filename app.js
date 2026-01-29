@@ -229,7 +229,12 @@ function stopEntranceBGM() {
 
 // ===== SCREEN NAVIGATION =====
 function showScreen(screenId) {
-    // 모든 화면 비활성화
+    
+    // Defensive: prevent page-level scroll from moving between screens
+    window.scrollTo(0, 0);
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+// 모든 화면 비활성화
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     
     const targetScreen = document.getElementById(screenId);
@@ -238,11 +243,7 @@ function showScreen(screenId) {
     // 새 화면으로 전환 시 스크롤 위치 초기화
     targetScreen.scrollTop = 0;
 
-    
-    window.scrollTo(0, 0);
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-// Entrance BGM only on the home screen. Stop it immediately when entering a dungeon.
+    // Entrance BGM only on the home screen. Stop it immediately when entering a dungeon.
     if (screenId === 'home-screen') {
         playEntranceBGM();
     } else {

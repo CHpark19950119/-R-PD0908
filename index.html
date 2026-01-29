@@ -40,17 +40,14 @@
         html, body {
             height: 100%;
             overflow: hidden;
-            overscroll-behavior: none;
         }
         
-        .screen {
-            display: none;
-            position: fixed;
-            inset: 0;
+        .screen { 
+            display: none; 
+            height: 100%; 
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
         }
         .screen.active { 
             display: block;
@@ -66,14 +63,14 @@
         }
         
         #home-screen {
-            background: url('assets/dungeon-bg.png') center center / cover no-repeat;
+            background: url('assets/dungeon-bg.png') center center / cover no-repeat fixed;
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
             padding-bottom: 30px;
-            min-height: 100%;
-            overflow-y: auto;
+            height: 100%;
+            overflow: hidden;
         }
         #home-screen::before {
             content: '';
@@ -85,8 +82,7 @@
                 rgba(15, 12, 20, 0.65) 100%);
             pointer-events: none;
         }
-        .home-content { position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; min-height: 100%;
-            overflow-y: auto; }
+        .home-content { position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .home-title { 
             font-family: 'Cinzel', serif; 
@@ -533,7 +529,44 @@
            dungeon-rooms.jpg is now used consistently and kept visible.
         */
 
-    </style>
+    
+/* ===== SCROLL ARCHITECTURE OVERRIDE (2026-01-29) =====
+   Goal:
+   - No page-to-page navigation via scroll (body locked)
+   - Scroll allowed ONLY inside the currently active .screen (intra-page scroll)
+   - Mobile/iOS friendly scrolling
+*/
+html, body {
+  height: 100% !important;
+  overflow: hidden !important;           /* lock page scroll */
+  overscroll-behavior: none !important;
+}
+
+/* Each screen becomes the only scroll container */
+.screen {
+  position: fixed !important;
+  inset: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+}
+
+/* Home screen must be scrollable (it previously had overflow:hidden) */
+#home-screen,
+#home-screen .home-content {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* iOS Safari has issues with background-attachment: fixed */
+#home-screen {
+  background-attachment: scroll !important;
+}
+
+</style>
 </head>
 <body>
 
