@@ -40,14 +40,17 @@
         html, body {
             height: 100%;
             overflow: hidden;
+            overscroll-behavior: none;
         }
         
-        .screen { 
-            display: none; 
-            height: 100%; 
+        .screen {
+            display: none;
+            position: fixed;
+            inset: 0;
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
         }
         .screen.active { 
             display: block;
@@ -63,14 +66,14 @@
         }
         
         #home-screen {
-            background: url('assets/dungeon-bg.png') center center / cover no-repeat fixed;
+            background: url('assets/dungeon-bg.png') center center / cover no-repeat;
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
             padding-bottom: 30px;
-            height: 100%;
-            overflow: hidden;
+            min-height: 100%;
+            overflow-y: auto;
         }
         #home-screen::before {
             content: '';
@@ -82,7 +85,8 @@
                 rgba(15, 12, 20, 0.65) 100%);
             pointer-events: none;
         }
-        .home-content { position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .home-content { position: relative; z-index: 10; padding: 20px; animation: fadeInUp 1s ease; display: flex; flex-direction: column; min-height: 100%;
+            overflow-y: auto; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .home-title { 
             font-family: 'Cinzel', serif; 
@@ -529,19 +533,7 @@
            dungeon-rooms.jpg is now used consistently and kept visible.
         */
 
-    
-/* ===== MODAL LAYER FIX (safe) ===== */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-}
-.modal {
-    position: relative;
-    z-index: 10000;
-}
-
-</style>
+    </style>
 </head>
 <body>
 
